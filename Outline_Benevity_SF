@@ -1,0 +1,47 @@
+''' Last Update: 03/24/2025 '''
+' Create a variable holding the value of the donation site, "DonationSite"
+    ' DonationSite = "Benevity"
+
+' Ask user if they are sure they want to proceed to the next steps of the 'DonationSite' converter
+    ' If they click "no", exit sub
+    ' If they click "yes", proceed to the next steps.
+
+' Create a variable for the worksheet called "Benevity Disbursement Details", call it "wsBenevityDetails"
+' Check if the "Benevity Disbursement Details" (wsBenevityDetails) worksheet has all the correct column headers (in the correct placement) - make it case-insensitive:
+    ' PERIOD END DATE (B1)
+    ' DISBURSING ENTITY (C1)
+    ' PAYMENT METHOD (D1)
+    ' DISBURSEMENT ID (E1)
+        ' If they are not:
+            ' write a message box saying:
+                ' "Please make sure to put the correct information in the 'Benevity Disbursement Details' worksheet. _
+                ' You will need the following column headers (in the following cells): and line break _
+                 ' PERIOD END DATE (B1) and line break
+                 ' DISBURSING ENTITY (C1) and line break
+                 ' PAYMENT METHOD (D1) and line break
+                 ' DISBURSEMENT ID (E1) and 3 line breaks
+                 ' *** To find get these details, you will need to go to the Benevity website and click the "Reports" tab for the respective school. _
+                 ' For an example of the information you need, click "HELP FIND BENEVITY DETAILS" button on the 'Benevity Disbursement Details' worksheet."
+            ' Exit Sub
+        ' If they are, proceed to the next steps
+
+' Open a file dialogue window to ask user for a folder path, save the folder path in a variable, "FolderPath"
+    ' If the user clicks "
+' Make sure the folder path has "Benevity" in its name.
+    ' If it doesn't, then give the user a message box saying:
+      ' "To run this macro, you need to have a folder with 'Benevity' in the file name. _
+      ' Please go back and change the folder name, or find the correct folder. Then try again.", _
+      ' 2 line breaks and "Folder Name Example: Benevity - 2025.03"
+    ' If it does, check to see if there are 1 or more CSV files in the folder.
+        ' If there is not, write a message box
+        
+' Start a loop
+    ' Go through each CSV file in the folderpath
+    ' Make a list of the file names that don't cause errors for the following:
+        ' Keep the current file name and save it in a variable, "TempFile"
+        ' Check row 4, column 1 (Column A) - Make sure it has "Charity ID" as its value
+            ' If it doesn't, Go to the next file and save this file name in a different list called: "UnusedFiles"
+            ' If that was found, check that there is a value in Column 2 of row 4.
+                ' If there is a column 2 (Column B) save the value in a variable, "CharityID"
+                ' If there is nothing in column 2 (Column B), then go to next file and save that file in the list "UnusedFiles"
+        ' Go to row 8 and make sure there is a
