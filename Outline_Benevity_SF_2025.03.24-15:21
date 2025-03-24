@@ -1,0 +1,214 @@
+Sub Benevity_SF_Part2()
+''' Last Update: 03/24/2025 '''
+
+' Create a variable to hold the value of the donation site, "DonationSite"
+    ' DonationSite = "Benevity"
+    
+' Create a variable, "DonationSiteStartRow", to hold the start row of the data from the Benevity Site's Reports.
+    ' DonationSiteStartRow = 13
+
+' Use a message box to ask the user if they are sure they want to proceed to Part 2 of the 'DonationSite' converter.
+    ' Create a variable, "UserResponse" to hold answer.
+    
+' Check the 'UserResponse' answer:
+    ' If they click "no", exit sub
+    ' If they click "yes", proceed to the next steps.
+    
+' Create a variable, "wbBenevityConverter", to hold the value of the current workbook.
+
+' Create a variable for the worksheet already named, "Benevity Disbursement Details", call the variable "wsBenevityDetails"
+
+' Check if the "Benevity Disbursement Details" (wsBenevityDetails) worksheet has all the correct column headers (in the correct placement) - make it case-insensitive:
+    ' PERIOD END DATE (B1)
+    ' DISBURSING ENTITY (C1)
+    ' PAYMENT METHOD (D1)
+    ' DISBURSEMENT ID (E1)
+        ' If they are not:
+            ' Create a message box to say:
+                ' "Please make sure to put the correct information in the 'Benevity Disbursement Details' worksheet. _
+                 ' You will need the following column headers (in the following cells): and line break _
+                 ' PERIOD END DATE (B1) and line break
+                 ' DISBURSING ENTITY (C1) and line break
+                 ' PAYMENT METHOD (D1) and line break
+                 ' DISBURSEMENT ID (E1) and 3 line breaks
+                 ' *** To find get these details, you will need to go to the Benevity website and click the "Reports" tab for the respective school. _
+                 ' For an example of the information you need, click "HELP FIND BENEVITY DETAILS" button on the 'Benevity Disbursement Details' worksheet."
+            ' Exit Sub
+        ' If they are, proceed to the next steps
+
+' Use a message box to ask the user if they have more than 1 file to converter.
+    ' Create a variable, "UserResponse2" to hold answer.
+
+' Check the "UserResponse2" variable.
+    ' If they chose "yes", jump to the 'BENEVITY - MULTIPLE REPORT CONSOLIDATION SECTION' of the macro.
+    ' If they chose "no", jump to the 'BENEVITY - SINGLE REPORT CONSOLIDATION SECTION' of the macro.
+
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'''''' BENEVITY - SINGLE REPORT CONSOLIDATION SECTION ''''''
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+' Start the 'BENEVITY - SINGLE REPORT CONSOLIDATION SECTION' section of the macro.
+
+
+' End the 'BENEVITY - SINGLE REPORT CONSOLIDATION SECTION' of the macro and jump to the 'BENEVITY REPORT CONVERSION SECTION' of the macro.
+
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+''''' BENEVITY - MULTIPLE REPORT CONSOLIDATION SECTION '''''
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+' Start the 'BENEVITY - MULTIPLE REPORT CONSOLIDATION SECTION' of the macro.
+
+' Open a file dialog window to ask user for a folder path, save the folder path in a variable, "FolderPath"
+    ' If the user clicks "Cancel",
+        ' Create a message box that says:
+            ' "No folder path was selected. Please find the correct folder path and try again."
+    ' If the user clicks on a folder path, store the folder path in a variable, "FolderPath".
+    
+' Check the "FolderPath" variable to make sure the folder name contains "Benevity" within the name.
+    ' If it doesn't, then give the user a message box saying:
+        ' "To run this macro, you need to have a folder with 'Benevity' in the file name. _
+         ' Please go back and change the folder name, or find the correct folder. Then try again.", _
+         ' 2 line breaks and "Folder Name Example: Benevity - 2025.03"
+    ' If it does, check to see if there is 1 or more CSV files in the folder.
+        ' If there is not, write a message box saying:
+            ' "No CSV files were found in the folder. Please go back and locate the correct folder, then try again."
+        ' If there is only 1 file. Store the file in name in a variable, "FilePath", then revert back to the "BENEVITY - SINGLE REPORT CONSOLIDATION SECTION" - Part ....
+        ' If there is more than 1 file, continue to the next steps.
+
+' Create a new worksheet called, "Benevity Consolidate & Convert". Store it in a variable, "wsReportConverter"
+' Populate the column headers for the "Benevity Consolidate & Convert" (wsReportConverter) worksheet.
+    ' Company (A1)
+    ' Project (B1)
+    ' Donation Date (C1)
+    ' Donor First Name (D1)
+    ' Donor Last Name (E1)
+    ' Email (F1)
+    ' Address (G1)
+    ' City (H1)
+    ' State/Province (I1)
+    ' Postal Code (J1)
+    ' Activity (K1)
+    ' Comment (L1)
+    ' Transaction ID (M1)
+    ' Donation Frequency (N1)
+    ' Currency (O1)
+    ' Project Remote ID (P1)
+    ' Source (Q1)
+    ' Reason (R1)
+    ' Total Donation to be Acknowledged (S1)
+    ' Match Amount (T1)
+    ' Cause Support Fee (U1)
+    ' Merchant Fee (V1)
+    ' Fee Comment (W1)
+    ' File Name (X1)
+    ' Worksheet Name (Y1)
+    '
+' Create a variable, "BenevityConvertLastRow", for the last row of the "wbBenevityConverter" workbook, worksheet "Benevity Consolidate & Convert" (wsBenevityConvert) and add 1 (equals 2)
+    ' BenevityConvertLastRow = 2
+
+' Create a variable, "wbTemp", to hold the value of the Temporary workbook as it loops through the files.
+' Create a variable, "TempBenevityFiles", to hold a list of the files that don't cause any issues
+' Create a variable, "UnusedFiles", to hold a list of the files that aren't Benevity files
+' Create a variable, "MissingDisbursements", to hold a list of the missing disbursements from Column E of the "Benevity Disbursement Details" (wsBenevityDetails) worksheet.
+' Create a variable, "DisbursementDetailsRow", to hold the cell row number if it is found in the "Benevity Disbursement Details" worksheet.
+' Create a variable, "DisbursementDate", to hold the disbursement date.
+' Create a variable, "SchoolUmbrella", to hold the value of the school umbrella based on Charity ID.
+
+' Run the public 'CurrentTime_Converter' procedure to get the public "CurrentTime" variable
+' Create a variable, "NewFolder". Name it "Benevity - " & CurrentTime
+' Create a new folder in the original 'FolderPath' and name it based off of "NewFolder"
+
+' Start a loop
+    ' Start to go through each CSV file in the 'FolderPath', open each file, one at a time.
+    ' Create a variable, "TempFile" to hold the value of the current file (the file name without the entire file path and the CSV extension) in the loop.
+    ' Check A4 to make sure it has "Charity ID" as its value.
+        ' If it doesn't:
+            ' Save this 'TempFile' name in the list, "UnusedFiles"
+            ' Close the file without saving any changes
+            ' Proceed to the next file.
+        ' If it was found:
+            ' Save the value of B4 in a variable, "CharityID"
+            ' Proceed to the next step in the loop.
+    ' Store the value of B8 in a variable, "DisbursementID"
+    ' Check Column E, in the "Benevity Disbursement Details" (wsBenevityDetails) worksheet to see if the "DisbursementID" is within one of the cells values.
+        ' If it isn't:
+            ' Save the 'DisbursementID' variable in the "MissingDisbursements" list.
+            ' Close the file without saving any changes.
+            ' Proceed to the next file.
+        ' If it was found:
+            ' Put the Cell Row number into a variable, "DisbursementDetailsRow".
+            ' Copy the disbursement details (B & DisbursementDetailsRow : E & DisbursementDetailsRow) from the "Benevity Disbursement Details" (wsBenevityDetails) and paste (transposed) _
+             ' into the current file (TempFile)'s worksheet D1:D4.
+            ' Place the Header values into column C for these details (in the correct cell)
+                ' PERIOD END DATE (C1)
+                ' DISBURSING ENTITY (C2)
+                ' PAYMENT METHOD (C3)
+                ' DISBURSEMENT ID (C4)
+                ' SCHOOL UMBRELLA (C5)
+                ' DISBURSEMENT DATE (C6)
+            ' Determine the 'SCHOOL UMBRELLA', CharityID falls into with this loop:
+                'If SchoolID = "840-NCES12_220054002502" Then
+                '    SchoolUmbrella = "BBR-1"
+                'ElseIf SchoolID = "840-820632126" Then
+                '    SchoolUmbrella = "BBR-2"
+                'ElseIf SchoolID = "840-860908854" Then
+                '    SchoolUmbrella = "BCSI"
+                'ElseIf SchoolID = "840-453369822" Then
+                '    SchoolUmbrella = "BDC"
+                'ElseIf SchoolID = "840-454269957" Then
+                '    SchoolUmbrella = "BTCS"
+                'Else
+                '    SchoolUmbrella = "N/A"
+                'End If
+            ' Place the "SchoolUmbrella" value into D5
+            ' Extract the DISBURSEMENT DATE and put it into D6. Use the data from D3 to get this value, using the following formula:
+                ' =IFERROR(TEXT(DATEVALUE(MID(MID(RIGHT(D3,11),1,10),6,2)&"/"&MID(MID(RIGHT(D3,11),1,10),9,2)&"/"&LEFT(MID(RIGHT(D3,11),1,10),4)),"MM/DD/YYYY"),"N/A")
+                    ' "=IFERROR(TEXT(DATEVALUE(MID(MID(RIGHT(D3,11),1,10),6,2)&""/""&MID(MID(RIGHT(D3,11),1,10),9,2)&""/""&LEFT(MID(RIGHT(D3,11),1,10),4)),""MM/DD/YYYY""),""N/A"")"
+            ' Copy the value of D6 and paste the values only, into D6.
+            ' Take the value of the D6 and store it into a variable, "DisbursementDate" - TEXT(D6,"YYYY.MM.DD")
+            ' Create a variable, "wsTempName", to create a new name for the current worksheet.
+                ' wsTempName = SchoolUmbrella & " - " & DisbursementDate & "(" & DisbursementID & ")"
+            ' Rename the current worksheet with the variable 'wsTempName'
+            ' Find the row "Net Total Payment" is held in, in column A, hold that row number in a variable, "NetAmountRow"
+            ' Use the "NetAmountRow" to store the value for the variable 'NetAmount' from column B + NetAmount Row.
+            ' Use the ("NetAmountRow" - 4) to find the last row of transaction data. Store the value in the variable "TempSheetLastRow".
+            ' Check to see the value between 'DonationSiteStartRow' and 'TempSheetLastRow'
+                ' If the 'DonationSiteStartRow' - 'TempSheetLastRow' is equal to 0:
+                    ' Copy A13:W13 to the "wbBenevityConverter" workbook into worksheet 'wsBenevityConvert' A & 'BenevityConvertLastRow'
+                    ' Place the File Name into X & 'BenevityConvertLastRow'
+                    ' Place the Worksheet name into Y & 'BenevityConvertLastRow'
+                    ' Copy B3:B8 from the Temporary worksheet and transpose the values into worksheet 'wsBenevityConvert' Z:AE 'BenevityConvertLastRow'
+                    ' Copy D1:D6 from the Temporary worksheet and transpose the values into worksheet 'wsBenevityConvert' AF:AK 'BenevityConvertLastRow'
+                    ' Update the "BenevityConvertLastRow" variable by adding 1
+                ' If it is greater than 1:
+                    ' Copy A13:W & 'TempSheetLastRow' to the "wbBenevityConverter" workbook into worksheet 'wsBenevityConvert' A & 'BenevityConvertLastRow'
+                    ' Place the File Name into X & 'BenevityConvertLastRow'
+                    ' Place the Worksheet name into Y & 'BenevityConvertLastRow'
+                    ' Copy B3:B8 from the Temporary worksheet and transpose the values into worksheet 'wsBenevityConvert' Z:AE 'BenevityConvertLastRow'
+                    ' Copy D1:D6 from the Temporary worksheet and transpose the values into worksheet 'wsBenevityConvert' AF:AK 'BenevityConvertLastRow'
+                    ' Update the "BenevityConvertLastRow" variable by finding the last row of the "wbBenevityConverter" workbook, worksheet "Benevity Consolidate & Convert" (wsBenevityConvert) and add 1
+            ' Copy the whole worksheet over to the "wbBenevityConverter" workbook. Place the worksheet at the end of the workbook.
+            ' Create a variable, "RenamedFile".
+                ' RenamedFile = "Benevity - " & DisbursementDate & " (" & SchoolUmbrella & ") - " & DisbursementID & " [$" & TEXT(NetAmount, "#,##0.00") & "]"
+            ' Save the Temporary worksheet using the 'RenamedFile' as a .CSV file and in the new folder.
+            ' Then go to the next file in the loop.
+            ' Add 'TempFile' to the "TempBenevityFiles" list
+    ' Once the loop finishes:
+        ' If the 'TempBenevityFiles' list is empty:
+            ' Create a Message Box for the user saying:
+                ' "No files were able to be converted." and 2 line breaks
+                ' "These Benevity disbursements, were not found in the "Benevity Disbursement Details" worksheet: " and 1 line break
+                    ' 'MissingDisbursements' variable and 2 line breaks
+                ' "These files did not appear to be Benevity reports: " and 1 line break
+                    ' 'UnusedFiles' variable
+        ' If the 'TempBenevityFiles' list is not empty. Proceed to the 'BENEVITY REPORT CONVERSION SECTION'
+    
+' End the 'BENEVITY - MULTIPLE REPORT CONSOLIDATION SECTION' of the macro and jump to the 'BENEVITY REPORT CONVERSION SECTION' of the macro.
+
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'''''''''''' BENEVITY REPORT CONVERSION SECTION ''''''''''''
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+
+End Sub
