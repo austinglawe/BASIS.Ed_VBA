@@ -1,0 +1,1242 @@
+Sub Benevity_SF_Part2()
+''' Last Update: 03/19/2025 '''
+
+    Dim UserResponse As VbMsgBoxResult
+    Dim UserResponse2 As VbMsgBoxResult
+    Dim wsBenevityDetails As Worksheet
+    
+    ' Define the worksheet where the data is located
+        Set wsBenevityDetails = ThisWorkbook.Worksheets("Benevity Disbursement Details")
+    
+    ' Step 1: Ask user if they are sure they want to continue
+        UserResponse = MsgBox("Are you sure you want to go to Part 2 of the 'SF' Benevity Converter?", vbYesNo + vbQuestion, "Confirmation to start the Benevity Converter")
+
+    ' Step 2: If user selects No, exit the sub
+        If UserResponse = vbNo Then
+            Exit Sub
+        End If
+        
+    ' Step 3: Check if the expected headers are present in columns B:E
+        If Trim(UCase(wsBenevityDetails.Range("B1").Value)) <> "PERIOD END DATE" Or Trim(UCase(wsBenevityDetails.Range("C1").Value)) <> "DISBURSING ENTITY" Or Trim(UCase(wsBenevityDetails.Range("D1").Value)) <> "PAYMENT METHOD" Or Trim(UCase(wsBenevityDetails.Range("E1").Value)) <> "DISBURSEMENT ID" Then
+           MsgBox "Please make sure you have the following column headers (and in the correct positions):" & vbCrLf & "PERIOD END DATE (B1)" & vbCrLf & "DISBURSING ENTITY (C1)" & vbCrLf & "PAYMENT METHOD (D1)" & vbCrLf & "DISBURSEMENT ID (E1)"
+           Exit Sub
+        End If
+
+    ' Step 4: Ask the user if they have multiple files to import
+        UserResponse2 = MsgBox("Do you have multiple Benevity files to import?", vbYesNo + vbQuestion, "Check which report process, user should execute")
+        
+    ' Step 5: Call the appropriate macro based on the response
+        If UserResponse2 = vbYes Then
+            Benevity_SF_MultiReport
+        Else
+            Benevity_SF_SingleReport
+        End If
+        
+End Sub
+
+Sub Benevity_SF_SingleReport()
+    ''' Last Update: 03/20/2025 '''
+    Dim fd As FileDialog
+    Dim FilePath As String
+    Dim FolderPath As String
+    Dim lineNum As Long
+    Dim fileLine As String
+    Dim SchoolID As String
+    Dim DisbursementID As String
+    Dim SchoolUmbrella As String
+    Dim wsDisbursementDetails As Worksheet
+    Dim PeriodEndDate As String
+    Dim NewFileName As String
+    Dim NewFilePath As String
+    Dim wbSource As Workbook
+    Dim FoundCell As Range
+    
+    Application.ScreenUpdating = False
+    
+    ' Step: Ask user to select the Benevity file and store the file path in a variable called "FilePath"
+    Set fd = Application.FileDialog(msoFileDialogFilePicker)
+    With fd
+        .Title = "Select Benevity File"
+        If .Show <> -1 Then
+            MsgBox "No File selected. Please locate the file and try again."
+            Application.ScreenUpdating = True
+            Exit Sub
+        End If
+        FilePath = .SelectedItems(1)
+    End With
+    
+    ' Step: Get FolderPath from FilePath variable.
+    FolderPath = Left(FilePath, InStrRev(FilePath, "\"))
+    
+    ' Step: Check if the file is a Benevity file and extract values from B4 and B8.
+    Open FilePath For Input As #1
+    lineNum = 0
+    Do While Not EOF(1)
+        Line Input #1, fileLine   ' Read a line from the CSV file
+        lineNum = lineNum + 1      ' Increment the line counter
+        
+        If lineNum = 4 Then
+            Dim arr() As String    ' Array to hold CSV values from line 4
+            arr = Split(fileLine, ",")
+            If UBound(arr) >= 1 Then
+                ' Check if cell A4 contains "Charity ID"
+                If Trim(arr(0)) = "Charity ID" Then
+                    SchoolID = arr(1)  ' Extract the second element (B4) into SchoolID
+                Else
+                    MsgBox "This file is not a Benevity file.", vbExclamation
+                    SchoolID = ""
+                    Close #1
+                    Application.ScreenUpdating = True
+                    Exit Sub
+                End If
+            End If
+        End If
+        
+        If lineNum = 8 Then
+            Dim arr8() As String   ' Array to hold CSV values from line 8
+            arr8 = Split(fileLine, ",")
+            If UBound(arr8) >= 1 Then
+                DisbursementID = arr8(1)  ' Extract the second element (B8) into DisbursementID
+            End If
+            Exit Do   ' Exit the loop after processing line 8
+        End If
+    Loop
+    Close #1
+    
+ 
+    ' Step: Determine which school umbrella the SchoolID falls under
+    If SchoolID = "840-NCES12_220054002502" Then
+        SchoolUmbrella = "BBR-1"
+    ElseIf SchoolID = "840-820632126" Then
+        SchoolUmbrella = "BBR-2"
+    ElseIf SchoolID = "840-860908854" Then
+        SchoolUmbrella = "BCSI"
+    ElseIf SchoolID = "840-453369822" Then
+        SchoolUmbrella = "BDC"
+    ElseIf SchoolID = "840-454269957" Then
+        SchoolUmbrella = "BTCS"
+    Else
+        MsgBox "The file you selected was either not a CSV file or the school could not be determined."
+        Application.ScreenUpdating = True
+        Exit Sub
+    End If
+    
+    ' Step: Determine whether DisbursementID exists in Column E of the "Benevity Disbursement Details" worksheet
+    Set wsDisbursementDetails = ThisWorkbook.Worksheets("Benevity Disbursement Details")
+    Set FoundCell = wsDisbursementDetails.Columns("E").Find(What:=DisbursementID, _
+                                        LookIn:=xlValues, LookAt:=xlWhole, MatchCase:=False)
+    If FoundCell Is Nothing Then
+        MsgBox "The Benevity file you tried to convert does not have a matching Disbursement ID (" & DisbursementID & ") in the 'Benevity Disbursement Details' worksheet." & vbCrLf & _
+               "Please go back to the Benevity website, find the required details, and try again.", vbExclamation
+        Application.ScreenUpdating = True
+        Exit Sub
+    End If
+    
+    ' Step: Open the CSV file as a workbook for further processing.
+    Set wbSource = Workbooks.Open(FilePath)
+    
+    With wbSource.Sheets(1)
+        ' Place header labels in cells C1 through C5.
+        .Range("C1").Value = "PERIOD END DATE"
+        .Range("C2").Value = "DISBURSING ENTITY"
+        .Range("C3").Value = "PAYMENT METHOD"
+        .Range("C4").Value = "DISBURSEMENT ID"
+        .Range("C5").Value = "SCHOOL UMBRELLA"
+        
+        ' Copy columns B to E from the Benevity Disbursement Details worksheet, row = FoundCell.Row.
+        wsDisbursementDetails.Range("B" & FoundCell.Row & ":E" & FoundCell.Row).Copy
+        
+        ' Paste the copied data transposed into cell D1 of the CSV file.
+        .Range("D1").PasteSpecial Paste:=xlPasteAll, Operation:=xlNone, SkipBlanks:=False, Transpose:=True
+        
+        ' Put the SchoolUmbrella variable into cell D5.
+        .Range("D5").Value = SchoolUmbrella
+        
+        ' Get the value from D1, format it as "YYYY.MM.DD" and store in PeriodEndDate.
+        If IsDate(.Range("D1").Value) Then
+            PeriodEndDate = Format(.Range("D1").Value, "yyyy.mm.dd")
+        Else
+            PeriodEndDate = .Range("D1").Value ' Use the raw value if not a date
+        End If
+        
+        ' Extract the Disbursement Date and Place it into D6
+        .Range("C6").Value = "DISBURSEMENT DATE"
+        .Range("D6").Value = "=IFERROR(TEXT(DATEVALUE(MID(MID(RIGHT(D3,11),1,10),6,2)&""/""&MID(MID(RIGHT(D3,11),1,10),9,2)&""/""&LEFT(MID(RIGHT(D3,11),1,10),4)),""MM/DD/YYYY""),""N/A"")"
+        .Range("D6").Copy
+        .Range("D6").PasteSpecial xlPasteValues
+        
+    End With
+    
+    ' Step: Copy the worksheet from the CSV file and paste it at the end of the macro workbook.
+    wbSource.Sheets(1).Copy After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count)
+    
+    ' Set the new worksheet to a variable and rename it.
+    Dim wsBenevityReport As Worksheet
+    Set wsBenevityReport = ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count)
+    wsBenevityReport.Name = "Benevity Report"
+    
+    ' Bring in the data
+    Dim TxnStart As Long, TxnEnd As Long, TxnRows As Long
+    Dim i As Long
+    Dim wsReportConverter As Worksheet
+    
+    ' Set the destination worksheet
+    Set wsReportConverter = ThisWorkbook.Worksheets(ThisWorkbook.Sheets.Count)
+    wsReportConverter.Name = "Benevity Report Converter"
+    
+    With wbSource.Sheets(1)
+        ' Find the row that contains "Company" in column A.
+        For i = 1 To .UsedRange.Rows.Count
+            If .Cells(i, "A").Value = "Company" Then
+                TxnStart = i + 1   ' Set TxnStart to the row immediately after "Company"
+                Exit For
+            End If
+        Next i
+    
+        ' Find the row that contains "Totals" in column A.
+        For i = 1 To .UsedRange.Rows.Count
+            If .Cells(i, "A").Value = "Totals" Then
+                TxnEnd = i - 1     ' Set TxnEnd to the row immediately before "Totals"
+                Exit For
+            End If
+        Next i
+    End With
+    
+    ' Calculate the number of transaction rows
+    TxnRows = TxnEnd - TxnStart + 1
+    
+    ' Copy columns A:W for each transaction row into wsReportConverter starting at A2.
+    If TxnRows = 1 Then
+        wbSource.Sheets(1).Range("A" & TxnStart & ":W" & TxnStart).Copy wsReportConverter.Range("A2")
+        wsReportConverter.Range("X2").Value = "Benevity - " & PeriodEndDate & " (" & SchoolUmbrella & ") - " & DisbursementID & ".csv"
+    Else
+        wbSource.Sheets(1).Range("A" & TxnStart & ":W" & TxnEnd).Copy wsReportConverter.Range("A2")
+        wsReportConverter.Range("X2:X" & TxnRows + 1).Value = "Benevity - " & PeriodEndDate & " (" & SchoolUmbrella & ") - " & DisbursementID & ".csv"
+    End If
+    
+    ' Step: Save the CSV file in a new folder within the original FolderPath.
+    CurrentTime_Converter
+    Dim NewFolderPath As String
+    NewFolderPath = CStr(FolderPath) & "Benevity Renamed for AR Team - " & CStr(CurrentTime) & "\"
+    If Dir(NewFolderPath, vbDirectory) = "" Then
+        MkDir NewFolderPath
+    End If
+    
+    NewFileName = "Benevity - " & PeriodEndDate & " (" & SchoolUmbrella & ") - " & DisbursementID & ".csv"
+    NewFilePath = NewFolderPath & NewFileName
+    
+    Application.DisplayAlerts = False
+    wbSource.SaveAs Filename:=NewFilePath, FileFormat:=xlCSV
+    Application.DisplayAlerts = True
+    
+    wbSource.Close SaveChanges:=False
+    
+    ' Additional Steps:
+    ' 1. Check if a "Benevity Example" worksheet exists; if yes, delete it.
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets("Benevity Example")
+    If Not ws Is Nothing Then
+        Application.DisplayAlerts = False
+        ws.Delete
+        Application.DisplayAlerts = True
+    End If
+    On Error GoTo 0
+    
+    ' 2. Delete Column A from the "Benevity Disbursement Details" worksheet and hide the worksheet.
+    With wsDisbursementDetails
+        .Unprotect
+        .Columns("A").Delete
+        .Visible = xlSheetHidden
+    End With
+    
+    ' 3. AutoFit the columns A:W in the "Benevity Report" worksheet.
+    With wsBenevityReport
+        .Columns("A:W").AutoFit
+        .Activate
+        .Range("A1").Select
+    End With
+    
+    ' 4. Create additional worksheets if they do not already exist.
+    Dim wsConvertedToTwoLines As Worksheet
+    Dim wsSorted As Worksheet
+    Dim wsSFImport As Worksheet
+    Dim wsSchoolMapping As Worksheet
+    
+    Set wsConvertedToTwoLines = ThisWorkbook.Worksheets("Converted to Two Lines")
+    Set wsSorted = ThisWorkbook.Worksheets("Sorted and Put into Lines")
+    Set wsSFImport = ThisWorkbook.Worksheets("SF Import File")
+    Set wsSchoolMap = ThisWorkbook.Worksheets("School Mapping")
+
+        Set wsConvertedToTwoLines = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
+        wsConvertedToTwoLines.Name = "Converted to Two Lines"
+
+        Set wsSorted = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
+        wsSorted.Name = "Sorted and Put into Lines"
+
+        Set wsSFImport = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
+        wsSFImport.Name = "SF Import File"
+        
+        Set wsSchoolMap = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
+        wsSchoolMap.Name = "School Mapping"
+    
+    ' Populate the 'School Mapping' Worksheet
+        wsSchoolMap.Range("B2").Value = "C&P Account Name"
+        wsSchoolMap.Range("B3").Value = "BASIS Charter Schools Inc."
+        wsSchoolMap.Range("B4").Value = "BDC, A Public Charter School Inc."
+        wsSchoolMap.Range("B5").Value = "BASIS Texas Charter Schools Inc."
+        wsSchoolMap.Range("B6").Value = "BASIS Ahwatukee"
+        wsSchoolMap.Range("B7").Value = "BASIS Austin"
+        wsSchoolMap.Range("B8").Value = "BASIS Austin Primary"
+        wsSchoolMap.Range("B9").Value = "BASIS Baton Rouge - Materra Campus"
+        wsSchoolMap.Range("B10").Value = "BASIS Baton Rouge - Mid City Campus "
+        wsSchoolMap.Range("B11").Value = "BASIS Benbrook"
+        wsSchoolMap.Range("B12").Value = "BASIS Cedar Park"
+        wsSchoolMap.Range("B13").Value = "BASIS Cedar Park Primary"
+        wsSchoolMap.Range("B14").Value = "BASIS Chandler"
+        wsSchoolMap.Range("B15").Value = "BASIS Chandler Primary - North Campus"
+        wsSchoolMap.Range("B16").Value = "BASIS Chandler Primary - South Campus"
+        wsSchoolMap.Range("B17").Value = "BASIS Flagstaff"
+        wsSchoolMap.Range("B18").Value = "BASIS Goodyear"
+        wsSchoolMap.Range("B19").Value = "BASIS Goodyear Primary"
+        wsSchoolMap.Range("B20").Value = "BASIS Mesa"
+        wsSchoolMap.Range("B21").Value = "BASIS Oro Valley"
+        wsSchoolMap.Range("B22").Value = "BASIS Oro Valley Primary"
+        wsSchoolMap.Range("B23").Value = "BASIS Peoria"
+        wsSchoolMap.Range("B24").Value = "BASIS Peoria Primary"
+        wsSchoolMap.Range("B25").Value = "BASIS Phoenix"
+        wsSchoolMap.Range("B26").Value = "BASIS Phoenix Central"
+        wsSchoolMap.Range("B27").Value = "BASIS Phoenix Primary"
+        wsSchoolMap.Range("B28").Value = "BASIS Phoenix South"
+        wsSchoolMap.Range("B29").Value = "BASIS Pflugerville"
+        wsSchoolMap.Range("B30").Value = "BASIS Pflugerville Primary"
+        wsSchoolMap.Range("B31").Value = "BASIS Prescott"
+        wsSchoolMap.Range("B32").Value = "BASIS San Antonio - Jack Lewis, Jr. Campus"
+        wsSchoolMap.Range("B33").Value = "BASIS San Antonio Primary - Jack Lewis, Jr. Campus"
+        wsSchoolMap.Range("B34").Value = "BASIS San Antonio Primary - Medical Center Campus"
+        wsSchoolMap.Range("B35").Value = "BASIS San Antonio Primary - North Central Campus"
+        wsSchoolMap.Range("B36").Value = "BASIS San Antonio Shavano Campus"
+        wsSchoolMap.Range("B37").Value = "BASIS San Antonio Primary - Northeast Campus"
+        wsSchoolMap.Range("B38").Value = "BASIS San Antonio Northeast Campus"
+        wsSchoolMap.Range("B39").Value = "BASIS Scottsdale"
+        wsSchoolMap.Range("B40").Value = "BASIS Scottsdale Primary - East Campus"
+        wsSchoolMap.Range("B41").Value = "BASIS Scottsdale Primary - West Campus"
+        wsSchoolMap.Range("B42").Value = "BASIS Tucson North"
+        wsSchoolMap.Range("B43").Value = "BASIS Tucson Primary"
+        wsSchoolMap.Range("B44").Value = "BASIS BASIS Washington DC"
+        wsSchoolMap.Range("C2").Value = "Benevity"
+        wsSchoolMap.Range("C3").Value = "BASIS CHARTER SCHOOLS INC"
+        wsSchoolMap.Range("C4").Value = ""
+        wsSchoolMap.Range("C5").Value = "BTX SCHOOLS INC"
+        wsSchoolMap.Range("C6").Value = "BASIS Ahwatukee"
+        wsSchoolMap.Range("C7").Value = "BASIS Austin"
+        wsSchoolMap.Range("C8").Value = "BASIS Austin Primary"
+        wsSchoolMap.Range("C9").Value = "BBR Schools Inc."
+        wsSchoolMap.Range("C10").Value = "BASIS Baton Rouge Primary Mid City"
+        wsSchoolMap.Range("C11").Value = "BASIS Benbrook"
+        wsSchoolMap.Range("C12").Value = "BASIS Cedar Park"
+        wsSchoolMap.Range("C13").Value = ""
+        wsSchoolMap.Range("C14").Value = "BASIS Chandler"
+        wsSchoolMap.Range("C15").Value = "BASIS Chandler Primary North"
+        wsSchoolMap.Range("C16").Value = "BASIS Chandler Primary South"
+        wsSchoolMap.Range("C17").Value = "BASIS Flagstaff"
+        wsSchoolMap.Range("C18").Value = "BASIS Goodyear"
+        wsSchoolMap.Range("C19").Value = "BASIS Goodyear Primary"
+        wsSchoolMap.Range("C20").Value = "BASIS Mesa"
+        wsSchoolMap.Range("C21").Value = "BASIS Oro Valley"
+        wsSchoolMap.Range("C22").Value = "BASIS Oro Valley Primary"
+        wsSchoolMap.Range("C23").Value = "BASIS Peoria"
+        wsSchoolMap.Range("C24").Value = "BASIS Peoria Primary"
+        wsSchoolMap.Range("C25").Value = "BASIS Phoenix"
+        wsSchoolMap.Range("C26").Value = "BASIS Phoenix Central"
+        wsSchoolMap.Range("C27").Value = "BASIS Phoenix Primary"
+        wsSchoolMap.Range("C28").Value = "BASIS Phoenix South Primary"
+        wsSchoolMap.Range("C29").Value = "BASIS Pflugerville"
+        wsSchoolMap.Range("C30").Value = ""
+        wsSchoolMap.Range("C31").Value = "BASIS Prescott"
+        wsSchoolMap.Range("C32").Value = "BASIS San Antonio Jack Lewis Jr. Campus"
+        wsSchoolMap.Range("C33").Value = ""
+        wsSchoolMap.Range("C34").Value = "BASIS San Antonio Primary - Medical Center"
+        wsSchoolMap.Range("C35").Value = "BASIS San Antonio Primary - North Central"
+        wsSchoolMap.Range("C36").Value = "BASIS San Antonio - Shavano"
+        wsSchoolMap.Range("C37").Value = "BASIS San Antonio Primary Northeast"
+        wsSchoolMap.Range("C38").Value = "BASIS San Antonio Northeast"
+        wsSchoolMap.Range("C39").Value = "BASIS Scottsdale"
+        wsSchoolMap.Range("C40").Value = "BASIS Scottsdale Primary"
+        wsSchoolMap.Range("C41").Value = "BASIS Scottsdale Primary West"
+        wsSchoolMap.Range("C42").Value = "BASIS Tucson North"
+        wsSchoolMap.Range("C43").Value = "BASIS Tucson Primary"
+        wsSchoolMap.Range("C44").Value = "BDC A PUBLIC CHARTER SCHOOL INC"
+        wsSchoolMap.Range("D2").Value = "Campaign Naming"
+        wsSchoolMap.Range("D3").Value = "BASIS Charter Schools Inc."
+        wsSchoolMap.Range("D4").Value = ""
+        wsSchoolMap.Range("D5").Value = "BASIS Texas Charter Schools Inc."
+        wsSchoolMap.Range("D6").Value = "Ahwatukee"
+        wsSchoolMap.Range("D7").Value = "Austin"
+        wsSchoolMap.Range("D8").Value = "Austin Primary"
+        wsSchoolMap.Range("D9").Value = "Baton Rouge - Materra"
+        wsSchoolMap.Range("D10").Value = "Baton Rouge - Mid City"
+        wsSchoolMap.Range("D11").Value = "Benbrook"
+        wsSchoolMap.Range("D12").Value = "Cedar Park"
+        wsSchoolMap.Range("D13").Value = "Cedar Park Primary"
+        wsSchoolMap.Range("D14").Value = "Chandler"
+        wsSchoolMap.Range("D15").Value = "Chandler Primary - North"
+        wsSchoolMap.Range("D16").Value = "Chandler Primary - South"
+        wsSchoolMap.Range("D17").Value = "Flagstaff"
+        wsSchoolMap.Range("D18").Value = "Goodyear"
+        wsSchoolMap.Range("D19").Value = "Goodyear Primary"
+        wsSchoolMap.Range("D20").Value = "Mesa"
+        wsSchoolMap.Range("D21").Value = "Oro Valley"
+        wsSchoolMap.Range("D22").Value = "Oro Valley Primary"
+        wsSchoolMap.Range("D23").Value = "Peoria"
+        wsSchoolMap.Range("D24").Value = "Peoria Primary"
+        wsSchoolMap.Range("D25").Value = "Phoenix"
+        wsSchoolMap.Range("D26").Value = "Phoenix Central"
+        wsSchoolMap.Range("D27").Value = "Phoenix Primary"
+        wsSchoolMap.Range("D28").Value = "Phoenix South"
+        wsSchoolMap.Range("D29").Value = "Pflugerville"
+        wsSchoolMap.Range("D30").Value = "Pflugerville Primary"
+        wsSchoolMap.Range("D31").Value = "Prescott"
+        wsSchoolMap.Range("D32").Value = "San Antonio Jack Lewis Jr."
+        wsSchoolMap.Range("D33").Value = "San Antonio Primary Jack Lewis Jr."
+        wsSchoolMap.Range("D34").Value = "San Antonio Primary Medical Center"
+        wsSchoolMap.Range("D35").Value = "San Antoni Primary North Central"
+        wsSchoolMap.Range("D36").Value = "San Antonio Shavano"
+        wsSchoolMap.Range("D37").Value = "San Antonio Primary Northeast"
+        wsSchoolMap.Range("D38").Value = "San Antonio Northeast"
+        wsSchoolMap.Range("D39").Value = "Scottsdale"
+        wsSchoolMap.Range("D40").Value = "Scottsdale Primary East"
+        wsSchoolMap.Range("D41").Value = "Scottsdale Primary West"
+        wsSchoolMap.Range("D42").Value = "Tucson North"
+        wsSchoolMap.Range("D43").Value = "Tucson Primary"
+        wsSchoolMap.Range("D44").Value = "DC"
+        wsSchoolMap.Range("E2").Value = "C&P Account #"
+        wsSchoolMap.Range("E3").Value = "35412"
+        wsSchoolMap.Range("E4").Value = "35438"
+        wsSchoolMap.Range("E5").Value = ""
+        wsSchoolMap.Range("E6").Value = "35418"
+        wsSchoolMap.Range("E7").Value = "61369"
+        wsSchoolMap.Range("E8").Value = "61096"
+        wsSchoolMap.Range("E9").Value = "50884"
+        wsSchoolMap.Range("E10").Value = "61367"
+        wsSchoolMap.Range("E11").Value = "61620"
+        wsSchoolMap.Range("E12").Value = "61773"
+        wsSchoolMap.Range("E13").Value = "61772"
+        wsSchoolMap.Range("E14").Value = "35419"
+        wsSchoolMap.Range("E15").Value = "35468"
+        wsSchoolMap.Range("E16").Value = "35422"
+        wsSchoolMap.Range("E17").Value = "35425"
+        wsSchoolMap.Range("E18").Value = "35426"
+        wsSchoolMap.Range("E19").Value = "35440"
+        wsSchoolMap.Range("E20").Value = "35427"
+        wsSchoolMap.Range("E21").Value = "35428"
+        wsSchoolMap.Range("E22").Value = "35439"
+        wsSchoolMap.Range("E23").Value = "35429"
+        wsSchoolMap.Range("E24").Value = "38139"
+        wsSchoolMap.Range("E25").Value = "35430"
+        wsSchoolMap.Range("E26").Value = "35431"
+        wsSchoolMap.Range("E27").Value = "50885"
+        wsSchoolMap.Range("E28").Value = "38346"
+        wsSchoolMap.Range("E29").Value = "61621"
+        wsSchoolMap.Range("E30").Value = "61622"
+        wsSchoolMap.Range("E31").Value = "35432"
+        wsSchoolMap.Range("E32").Value = "61623"
+        wsSchoolMap.Range("E33").Value = "61624"
+        wsSchoolMap.Range("E34").Value = "35441"
+        wsSchoolMap.Range("E35").Value = "35442"
+        wsSchoolMap.Range("E36").Value = "38511"
+        wsSchoolMap.Range("E37").Value = "61098"
+        wsSchoolMap.Range("E38").Value = "61097"
+        wsSchoolMap.Range("E39").Value = "35433"
+        wsSchoolMap.Range("E40").Value = "35435"
+        wsSchoolMap.Range("E41").Value = "50886"
+        wsSchoolMap.Range("E42").Value = "35437"
+        wsSchoolMap.Range("E43").Value = "35436"
+        wsSchoolMap.Range("E44").Value = "60203"
+        wsSchoolMap.Range("F2").Value = "Red"
+        wsSchoolMap.Range("F3").Value = ""
+        wsSchoolMap.Range("F4").Value = ""
+        wsSchoolMap.Range("F5").Value = ""
+        wsSchoolMap.Range("F6").Value = "166"
+        wsSchoolMap.Range("F7").Value = "0"
+        wsSchoolMap.Range("F8").Value = "0"
+        wsSchoolMap.Range("F9").Value = "0"
+        wsSchoolMap.Range("F10").Value = "98"
+        wsSchoolMap.Range("F11").Value = "134"
+        wsSchoolMap.Range("F12").Value = "57"
+        wsSchoolMap.Range("F13").Value = "57"
+        wsSchoolMap.Range("F14").Value = "41"
+        wsSchoolMap.Range("F15").Value = "41"
+        wsSchoolMap.Range("F16").Value = "41"
+        wsSchoolMap.Range("F17").Value = "98"
+        wsSchoolMap.Range("F18").Value = "255"
+        wsSchoolMap.Range("F19").Value = "255"
+        wsSchoolMap.Range("F20").Value = "0"
+        wsSchoolMap.Range("F21").Value = "134"
+        wsSchoolMap.Range("F22").Value = "134"
+        wsSchoolMap.Range("F23").Value = "255"
+        wsSchoolMap.Range("F24").Value = "255"
+        wsSchoolMap.Range("F25").Value = "255"
+        wsSchoolMap.Range("F26").Value = "248"
+        wsSchoolMap.Range("F27").Value = "255"
+        wsSchoolMap.Range("F28").Value = "255"
+        wsSchoolMap.Range("F29").Value = "0"
+        wsSchoolMap.Range("F30").Value = "0"
+        wsSchoolMap.Range("F31").Value = "159"
+        wsSchoolMap.Range("F32").Value = "98"
+        wsSchoolMap.Range("F33").Value = "98"
+        wsSchoolMap.Range("F34").Value = "41"
+        wsSchoolMap.Range("F35").Value = "0"
+        wsSchoolMap.Range("F36").Value = "0"
+        wsSchoolMap.Range("F37").Value = "98"
+        wsSchoolMap.Range("F38").Value = "98"
+        wsSchoolMap.Range("F39").Value = "98"
+        wsSchoolMap.Range("F40").Value = "98"
+        wsSchoolMap.Range("F41").Value = "98"
+        wsSchoolMap.Range("F42").Value = "0"
+        wsSchoolMap.Range("F43").Value = "0"
+        wsSchoolMap.Range("F44").Value = "10"
+        wsSchoolMap.Range("G2").Value = "Green"
+        wsSchoolMap.Range("G3").Value = ""
+        wsSchoolMap.Range("G4").Value = ""
+        wsSchoolMap.Range("G5").Value = ""
+        wsSchoolMap.Range("G6").Value = "0"
+        wsSchoolMap.Range("G7").Value = "138"
+        wsSchoolMap.Range("G8").Value = "138"
+        wsSchoolMap.Range("G9").Value = "131"
+        wsSchoolMap.Range("G10").Value = "167"
+        wsSchoolMap.Range("G11").Value = "51"
+        wsSchoolMap.Range("G12").Value = "131"
+        wsSchoolMap.Range("G13").Value = "131"
+        wsSchoolMap.Range("G14").Value = "168"
+        wsSchoolMap.Range("G15").Value = "168"
+        wsSchoolMap.Range("G16").Value = "168"
+        wsSchoolMap.Range("G17").Value = "93"
+        wsSchoolMap.Range("G18").Value = "78"
+        wsSchoolMap.Range("G19").Value = "78"
+        wsSchoolMap.Range("G20").Value = "131"
+        wsSchoolMap.Range("G21").Value = "51"
+        wsSchoolMap.Range("G22").Value = "51"
+        wsSchoolMap.Range("G23").Value = "200"
+        wsSchoolMap.Range("G24").Value = "200"
+        wsSchoolMap.Range("G25").Value = "109"
+        wsSchoolMap.Range("G26").Value = "158"
+        wsSchoolMap.Range("G27").Value = "109"
+        wsSchoolMap.Range("G28").Value = "109"
+        wsSchoolMap.Range("G29").Value = "61"
+        wsSchoolMap.Range("G30").Value = "61"
+        wsSchoolMap.Range("G31").Value = "50"
+        wsSchoolMap.Range("G32").Value = "93"
+        wsSchoolMap.Range("G33").Value = "93"
+        wsSchoolMap.Range("G34").Value = "168"
+        wsSchoolMap.Range("G35").Value = "61"
+        wsSchoolMap.Range("G36").Value = "138"
+        wsSchoolMap.Range("G37").Value = "160"
+        wsSchoolMap.Range("G38").Value = "160"
+        wsSchoolMap.Range("G39").Value = "167"
+        wsSchoolMap.Range("G40").Value = "167"
+        wsSchoolMap.Range("G41").Value = "167"
+        wsSchoolMap.Range("G42").Value = "61"
+        wsSchoolMap.Range("G43").Value = "129"
+        wsSchoolMap.Range("G44").Value = "34"
+        wsSchoolMap.Range("H2").Value = "Blue"
+        wsSchoolMap.Range("H3").Value = ""
+        wsSchoolMap.Range("H4").Value = ""
+        wsSchoolMap.Range("H5").Value = ""
+        wsSchoolMap.Range("H6").Value = "100"
+        wsSchoolMap.Range("H7").Value = "186"
+        wsSchoolMap.Range("H8").Value = "186"
+        wsSchoolMap.Range("H9").Value = "63"
+        wsSchoolMap.Range("H10").Value = "15"
+        wsSchoolMap.Range("H11").Value = "154"
+        wsSchoolMap.Range("H12").Value = "70"
+        wsSchoolMap.Range("H13").Value = "70"
+        wsSchoolMap.Range("H14").Value = "157"
+        wsSchoolMap.Range("H15").Value = "157"
+        wsSchoolMap.Range("H16").Value = "157"
+        wsSchoolMap.Range("H17").Value = "156"
+        wsSchoolMap.Range("H18").Value = "0"
+        wsSchoolMap.Range("H19").Value = "0"
+        wsSchoolMap.Range("H20").Value = "63"
+        wsSchoolMap.Range("H21").Value = "154"
+        wsSchoolMap.Range("H22").Value = "154"
+        wsSchoolMap.Range("H23").Value = "69"
+        wsSchoolMap.Range("H24").Value = "69"
+        wsSchoolMap.Range("H25").Value = "16"
+        wsSchoolMap.Range("H26").Value = "77"
+        wsSchoolMap.Range("H27").Value = "16"
+        wsSchoolMap.Range("H28").Value = "16"
+        wsSchoolMap.Range("H29").Value = "167"
+        wsSchoolMap.Range("H30").Value = "167"
+        wsSchoolMap.Range("H31").Value = "36"
+        wsSchoolMap.Range("H32").Value = "156"
+        wsSchoolMap.Range("H33").Value = "156"
+        wsSchoolMap.Range("H34").Value = "157"
+        wsSchoolMap.Range("H35").Value = "167"
+        wsSchoolMap.Range("H36").Value = "186"
+        wsSchoolMap.Range("H37").Value = "68"
+        wsSchoolMap.Range("H38").Value = "68"
+        wsSchoolMap.Range("H39").Value = "15"
+        wsSchoolMap.Range("H40").Value = "15"
+        wsSchoolMap.Range("H41").Value = "15"
+        wsSchoolMap.Range("H42").Value = "167"
+        wsSchoolMap.Range("H43").Value = "188"
+        wsSchoolMap.Range("H44").Value = "64"
+        wsSchoolMap.Range("I2").Value = "Hex"
+        wsSchoolMap.Range("I3").Value = ""
+        wsSchoolMap.Range("I4").Value = ""
+        wsSchoolMap.Range("I5").Value = ""
+        wsSchoolMap.Range("I6").Value = "A60064"
+        wsSchoolMap.Range("I7").Value = "0081BC"
+        wsSchoolMap.Range("I8").Value = "0081BC"
+        wsSchoolMap.Range("I9").Value = "00833F"
+        wsSchoolMap.Range("I10").Value = "62A70F"
+        wsSchoolMap.Range("I11").Value = "86339A"
+        wsSchoolMap.Range("I12").Value = "398346"
+        wsSchoolMap.Range("I13").Value = "398346"
+        wsSchoolMap.Range("I14").Value = "29A89D"
+        wsSchoolMap.Range("I15").Value = "29A89D"
+        wsSchoolMap.Range("I16").Value = "29A89D"
+        wsSchoolMap.Range("I17").Value = "625D9C"
+        wsSchoolMap.Range("I18").Value = "FF4E00"
+        wsSchoolMap.Range("I19").Value = "FF4E00"
+        wsSchoolMap.Range("I20").Value = "00833F"
+        wsSchoolMap.Range("I21").Value = "86339A"
+        wsSchoolMap.Range("I22").Value = "86339A"
+        wsSchoolMap.Range("I23").Value = "FFC845"
+        wsSchoolMap.Range("I24").Value = "FFC845"
+        wsSchoolMap.Range("I25").Value = "FF6D10"
+        wsSchoolMap.Range("I26").Value = "F89E4D"
+        wsSchoolMap.Range("I27").Value = "FF6D10"
+        wsSchoolMap.Range("I28").Value = "FF6D10"
+        wsSchoolMap.Range("I29").Value = "003DA7"
+        wsSchoolMap.Range("I30").Value = "003DA7"
+        wsSchoolMap.Range("I31").Value = "9F3224"
+        wsSchoolMap.Range("I32").Value = "625D9C"
+        wsSchoolMap.Range("I33").Value = "625D9C"
+        wsSchoolMap.Range("I34").Value = "29A89D"
+        wsSchoolMap.Range("I35").Value = "003DA7"
+        wsSchoolMap.Range("I36").Value = "0081BC"
+        wsSchoolMap.Range("I37").Value = "62A044"
+        wsSchoolMap.Range("I38").Value = "62A044"
+        wsSchoolMap.Range("I39").Value = "62A70F"
+        wsSchoolMap.Range("I40").Value = "62A70F"
+        wsSchoolMap.Range("I41").Value = "62A70F"
+        wsSchoolMap.Range("I42").Value = "003DA7"
+        wsSchoolMap.Range("I43").Value = "0081BC"
+        wsSchoolMap.Range("I44").Value = "0A2240"
+        wsSchoolMap.Range("J2").Value = "Power School  ID"
+        wsSchoolMap.Range("J3").Value = ""
+        wsSchoolMap.Range("J4").Value = ""
+        wsSchoolMap.Range("J5").Value = ""
+        wsSchoolMap.Range("J6").Value = "321"
+        wsSchoolMap.Range("J7").Value = "605"
+        wsSchoolMap.Range("J8").Value = "604"
+        wsSchoolMap.Range("J9").Value = "501"
+        wsSchoolMap.Range("J10").Value = "502"
+        wsSchoolMap.Range("J11").Value = "606"
+        wsSchoolMap.Range("J12").Value = "611"
+        wsSchoolMap.Range("J13").Value = "612"
+        wsSchoolMap.Range("J14").Value = "324"
+        wsSchoolMap.Range("J15").Value = "405"
+        wsSchoolMap.Range("J16").Value = "403"
+        wsSchoolMap.Range("J17").Value = "335"
+        wsSchoolMap.Range("J18").Value = "401"
+        wsSchoolMap.Range("J19").Value = "402"
+        wsSchoolMap.Range("J20").Value = "320"
+        wsSchoolMap.Range("J21").Value = "313"
+        wsSchoolMap.Range("J22").Value = "315"
+        wsSchoolMap.Range("J23").Value = "326"
+        wsSchoolMap.Range("J24").Value = "406"
+        wsSchoolMap.Range("J25").Value = "327"
+        wsSchoolMap.Range("J26").Value = "328"
+        wsSchoolMap.Range("J27").Value = "408"
+        wsSchoolMap.Range("J28").Value = "407"
+        wsSchoolMap.Range("J29").Value = "607"
+        wsSchoolMap.Range("J30").Value = "608"
+        wsSchoolMap.Range("J31").Value = "345"
+        wsSchoolMap.Range("J32").Value = "609"
+        wsSchoolMap.Range("J33").Value = "610"
+        wsSchoolMap.Range("J34").Value = "43612"
+        wsSchoolMap.Range("J35").Value = "43616"
+        wsSchoolMap.Range("J36").Value = "601"
+        wsSchoolMap.Range("J37").Value = "602"
+        wsSchoolMap.Range("J38").Value = "603"
+        wsSchoolMap.Range("J39").Value = "322"
+        wsSchoolMap.Range("J40").Value = "404"
+        wsSchoolMap.Range("J41").Value = "409"
+        wsSchoolMap.Range("J42").Value = "318"
+        wsSchoolMap.Range("J43").Value = "311"
+        wsSchoolMap.Range("J44").Value = "51509"
+        wsSchoolMap.Range("K2").Value = "Acronym"
+        wsSchoolMap.Range("K3").Value = ""
+        wsSchoolMap.Range("K4").Value = ""
+        wsSchoolMap.Range("K5").Value = ""
+        wsSchoolMap.Range("K6").Value = "AHW"
+        wsSchoolMap.Range("K7").Value = "AUS"
+        wsSchoolMap.Range("K8").Value = "AUSP"
+        wsSchoolMap.Range("K9").Value = "BBRM"
+        wsSchoolMap.Range("K10").Value = "BRMC"
+        wsSchoolMap.Range("K11").Value = "BEN"
+        wsSchoolMap.Range("K12").Value = "CPK"
+        wsSchoolMap.Range("K13").Value = "CPKP"
+        wsSchoolMap.Range("K14").Value = "CHD"
+        wsSchoolMap.Range("K15").Value = "CHPN"
+        wsSchoolMap.Range("K16").Value = "CHPS"
+        wsSchoolMap.Range("K17").Value = "FLG"
+        wsSchoolMap.Range("K18").Value = "GDY"
+        wsSchoolMap.Range("K19").Value = "GDYP"
+        wsSchoolMap.Range("K20").Value = "MES"
+        wsSchoolMap.Range("K21").Value = "OV"
+        wsSchoolMap.Range("K22").Value = "OVP"
+        wsSchoolMap.Range("K23").Value = "PEO"
+        wsSchoolMap.Range("K24").Value = "PEOP"
+        wsSchoolMap.Range("K25").Value = "PHX"
+        wsSchoolMap.Range("K26").Value = "PHXC"
+        wsSchoolMap.Range("K27").Value = "PHXP"
+        wsSchoolMap.Range("K28").Value = "PHXS"
+        wsSchoolMap.Range("K29").Value = "PFL"
+        wsSchoolMap.Range("K30").Value = "PFLP"
+        wsSchoolMap.Range("K31").Value = "PRE"
+        wsSchoolMap.Range("K32").Value = "JLJ"
+        wsSchoolMap.Range("K33").Value = "JLJP"
+        wsSchoolMap.Range("K34").Value = "SAMC"
+        wsSchoolMap.Range("K35").Value = "SANC"
+        wsSchoolMap.Range("K36").Value = "SAS"
+        wsSchoolMap.Range("K37").Value = "SAPN"
+        wsSchoolMap.Range("K38").Value = "SANE"
+        wsSchoolMap.Range("K39").Value = "SCD"
+        wsSchoolMap.Range("K40").Value = "SCPE"
+        wsSchoolMap.Range("K41").Value = "SCPW"
+        wsSchoolMap.Range("K42").Value = "TUCN"
+        wsSchoolMap.Range("K43").Value = "TUCP"
+        wsSchoolMap.Range("K44").Value = "BDC"
+        wsSchoolMap.Range("L2").Value = "Other Acronym"
+        wsSchoolMap.Range("L3").Value = ""
+        wsSchoolMap.Range("L4").Value = ""
+        wsSchoolMap.Range("L5").Value = ""
+        wsSchoolMap.Range("L6").Value = ""
+        wsSchoolMap.Range("L7").Value = ""
+        wsSchoolMap.Range("L8").Value = ""
+        wsSchoolMap.Range("L9").Value = ""
+        wsSchoolMap.Range("L10").Value = ""
+        wsSchoolMap.Range("L11").Value = ""
+        wsSchoolMap.Range("L12").Value = ""
+        wsSchoolMap.Range("L13").Value = ""
+        wsSchoolMap.Range("L14").Value = ""
+        wsSchoolMap.Range("L15").Value = ""
+        wsSchoolMap.Range("L16").Value = "CHP"
+        wsSchoolMap.Range("L17").Value = ""
+        wsSchoolMap.Range("L18").Value = ""
+        wsSchoolMap.Range("L19").Value = ""
+        wsSchoolMap.Range("L20").Value = ""
+        wsSchoolMap.Range("L21").Value = ""
+        wsSchoolMap.Range("L22").Value = ""
+        wsSchoolMap.Range("L23").Value = ""
+        wsSchoolMap.Range("L24").Value = ""
+        wsSchoolMap.Range("L25").Value = ""
+        wsSchoolMap.Range("L26").Value = ""
+        wsSchoolMap.Range("L27").Value = ""
+        wsSchoolMap.Range("L28").Value = ""
+        wsSchoolMap.Range("L29").Value = ""
+        wsSchoolMap.Range("L30").Value = ""
+        wsSchoolMap.Range("L31").Value = ""
+        wsSchoolMap.Range("L32").Value = ""
+        wsSchoolMap.Range("L33").Value = ""
+        wsSchoolMap.Range("L34").Value = "SA"
+        wsSchoolMap.Range("L35").Value = "SAN"
+        wsSchoolMap.Range("L36").Value = "SASV"
+        wsSchoolMap.Range("L37").Value = "SPNE"
+        wsSchoolMap.Range("L38").Value = ""
+        wsSchoolMap.Range("L39").Value = ""
+        wsSchoolMap.Range("L40").Value = "SCP"
+        wsSchoolMap.Range("L41").Value = ""
+        wsSchoolMap.Range("L42").Value = ""
+        wsSchoolMap.Range("L43").Value = "TUC"
+        wsSchoolMap.Range("L44").Value = ""
+        wsSchoolMap.Range("M2").Value = "Email"
+        wsSchoolMap.Range("M3").Value = "PartnershipsOffice@BASISed.com"
+        wsSchoolMap.Range("M4").Value = "ATF@BASISDC.org"
+        wsSchoolMap.Range("M5").Value = "ATF@BASISTexas.org"
+        wsSchoolMap.Range("M6").Value = "ATF@BASISAhwatukee.org"
+        wsSchoolMap.Range("M7").Value = "ATF@BASISAustin.org"
+        wsSchoolMap.Range("M8").Value = "ATF@BASISAustin.org"
+        wsSchoolMap.Range("M9").Value = "ATF@BASISBatonRougeMaterra.org"
+        wsSchoolMap.Range("M10").Value = "ATF@BASISBatonRougeMidCity.org"
+        wsSchoolMap.Range("M11").Value = "ATF@BASISBenbrook.org"
+        wsSchoolMap.Range("M12").Value = "ATF@BASISCedarPark.org"
+        wsSchoolMap.Range("M13").Value = "ATF@BASISCedarPark.org"
+        wsSchoolMap.Range("M14").Value = "ATF@BASISChandler.org"
+        wsSchoolMap.Range("M15").Value = "ATF@BASISChandlerPrimaryNC.org"
+        wsSchoolMap.Range("M16").Value = "ATF@BASISChandlerPrimarySC.org"
+        wsSchoolMap.Range("M17").Value = "ATF@BASISFlagstaff.org"
+        wsSchoolMap.Range("M18").Value = "ATF@BASISGoodyear.org"
+        wsSchoolMap.Range("M19").Value = "ATF@BASISGoodyear.org"
+        wsSchoolMap.Range("M20").Value = "ATF@BASISMesa.org"
+        wsSchoolMap.Range("M21").Value = "ATF@BASISOroValley.org"
+        wsSchoolMap.Range("M22").Value = "ATF@BASISOroValleyPrimary.org"
+        wsSchoolMap.Range("M23").Value = "ATF@BASISPeoria.org"
+        wsSchoolMap.Range("M24").Value = "ATF@BASISPeoriaPrimary.org"
+        wsSchoolMap.Range("M25").Value = "ATF@BASISPhoenix.org"
+        wsSchoolMap.Range("M26").Value = "ATF@BASISPhoenixCentral.org"
+        wsSchoolMap.Range("M27").Value = "ATF@BASISPhoenixPrimary.org"
+        wsSchoolMap.Range("M28").Value = "ATF@BASISPhoenixSouthPrimary.org"
+        wsSchoolMap.Range("M29").Value = "ATF@BASISPflugerville.org"
+        wsSchoolMap.Range("M30").Value = "ATF@BASISPflugerville.org"
+        wsSchoolMap.Range("M31").Value = "ATF@BASISPrescott.org"
+        wsSchoolMap.Range("M32").Value = "ATF@BASISSanAntonioJackLewisJr.org"
+        wsSchoolMap.Range("M33").Value = "ATF@BASISJackLewisJr.org"
+        wsSchoolMap.Range("M34").Value = "ATF@BASISSanAntonioMC.org"
+        wsSchoolMap.Range("M35").Value = "ATF@BASISSanAntonioNorth.org"
+        wsSchoolMap.Range("M36").Value = "ATF@BASISsanantonioShavano.org"
+        wsSchoolMap.Range("M37").Value = "ATF@BASISSanAntonioNortheast.org"
+        wsSchoolMap.Range("M38").Value = "ATF@BASISSanAntonioNortheast.org"
+        wsSchoolMap.Range("M39").Value = "ATF@BASISScottsdale.org"
+        wsSchoolMap.Range("M40").Value = "ATF@BASISScottsdalePrimaryEast.org"
+        wsSchoolMap.Range("M41").Value = "ATF@BASISScottsdalePrimaryWest.org"
+        wsSchoolMap.Range("M42").Value = "ATF@BASISTucsonNorth.org"
+        wsSchoolMap.Range("M43").Value = "ATF@BASISTucsonPrimary.org"
+        wsSchoolMap.Range("M44").Value = "ATF@BASISDC.org"
+        ' Adjust Column Width
+            wsSchoolMap.Columns("A:M").AutoFit
+    
+    ' Populate the 'Benevity Report Converter' Worksheet
+        ' Create the column Headers
+            wsReportConverter.Range("A1").Value = "Company"
+            wsReportConverter.Range("B1").Value = "Project"
+            wsReportConverter.Range("C1").Value = "Donation Date"
+            wsReportConverter.Range("D1").Value = "Donor First Name"
+            wsReportConverter.Range("E1").Value = "Donor Last Name"
+            wsReportConverter.Range("F1").Value = "Email"
+            wsReportConverter.Range("G1").Value = "Address"
+            wsReportConverter.Range("H1").Value = "City"
+            wsReportConverter.Range("I1").Value = "State/Province"
+            wsReportConverter.Range("J1").Value = "Postal Code"
+            wsReportConverter.Range("K1").Value = "Activity"
+            wsReportConverter.Range("L1").Value = "Comment"
+            wsReportConverter.Range("M1").Value = "Transaction ID"
+            wsReportConverter.Range("N1").Value = "Donation Frequency"
+            wsReportConverter.Range("O1").Value = "Currency"
+            wsReportConverter.Range("P1").Value = "Project Remote ID"
+            wsReportConverter.Range("Q1").Value = "Source"
+            wsReportConverter.Range("R1").Value = "Reason"
+            wsReportConverter.Range("S1").Value = "Total Donation to be Acknowledged"
+            wsReportConverter.Range("T1").Value = "Match Amount"
+            wsReportConverter.Range("U1").Value = "Cause Support Fee"
+            wsReportConverter.Range("V1").Value = "Merchant Fee"
+            wsReportConverter.Range("W1").Value = "Fee Comment"
+            wsReportConverter.Range("X1").Value = "Charity Name"
+            wsReportConverter.Range("Y1").Value = "Charity ID"
+            wsReportConverter.Range("Z1").Value = "Period Ending"
+            wsReportConverter.Range("AA1").Value = "Currency"
+            wsReportConverter.Range("AB1").Value = "Payment Method"
+            wsReportConverter.Range("AC1").Value = "Disbursement ID"
+            wsReportConverter.Range("AD1").Value = "Payment Method"
+            wsReportConverter.Range("AE1").Value = "Disbursement Date"
+            
+            wsReportConverter.Range("AF1").Value = "........."
+            wsReportConverter.Range("AG1").Value = "For Donor"
+            wsReportConverter.Range("AH1").Value = "Number - Transaction ID"
+            wsReportConverter.Range("AI1").Value = "Company"
+            wsReportConverter.Range("AJ1").Value = "Project"
+            wsReportConverter.Range("AK1").Value = "Donation Date"
+            wsReportConverter.Range("AL1").Value = "Donor First Name"
+            wsReportConverter.Range("AM1").Value = "Donor Last Name"
+            wsReportConverter.Range("AN1").Value = "Email"
+            wsReportConverter.Range("AO1").Value = "Address"
+            wsReportConverter.Range("AP1").Value = "City"
+            wsReportConverter.Range("AQ1").Value = "State/Province"
+            wsReportConverter.Range("AR1").Value = "Postal Code"
+            wsReportConverter.Range("AS1").Value = "Activity"
+            wsReportConverter.Range("AT1").Value = "Comment"
+            wsReportConverter.Range("AU1").Value = "Transaction ID"
+            wsReportConverter.Range("AV1").Value = "Donation Frequency"
+            wsReportConverter.Range("AW1").Value = "Currency"
+            wsReportConverter.Range("AX1").Value = "Project Remote ID"
+            wsReportConverter.Range("AY1").Value = "Source"
+            wsReportConverter.Range("AZ1").Value = "Reason"
+            wsReportConverter.Range("BA1").Value = "Total Donation to be Acknowledged"
+            wsReportConverter.Range("BB1").Value = "Match Amount"
+            wsReportConverter.Range("BC1").Value = "Cause Support Fee"
+            wsReportConverter.Range("BD1").Value = "Merchant Fee"
+            wsReportConverter.Range("BE1").Value = "Fee Comment"
+            wsReportConverter.Range("BF1").Value = "Charity Name"
+            wsReportConverter.Range("BG1").Value = "Charity ID"
+            wsReportConverter.Range("BH1").Value = "Period Ending"
+            wsReportConverter.Range("BI1").Value = "Currency"
+            wsReportConverter.Range("BJ1").Value = "Payment Method"
+            wsReportConverter.Range("BK1").Value = "Disbursement ID"
+            
+            wsReportConverter.Range("BL1").Value = "…........"
+            wsReportConverter.Range("BM1").Value = "For Company Match"
+            wsReportConverter.Range("BN1").Value = "Number - Transaction ID"
+            wsReportConverter.Range("BO1").Value = "Company"
+            wsReportConverter.Range("BP1").Value = "Project"
+            wsReportConverter.Range("BQ1").Value = "Donation Date"
+            wsReportConverter.Range("BR1").Value = "Donor First Name"
+            wsReportConverter.Range("BS1").Value = "Donor Last Name"
+            wsReportConverter.Range("BT1").Value = "Email"
+            wsReportConverter.Range("BU1").Value = "Address"
+            wsReportConverter.Range("BV1").Value = "City"
+            wsReportConverter.Range("BW1").Value = "State/Province"
+            wsReportConverter.Range("BX1").Value = "Postal Code"
+            wsReportConverter.Range("BY1").Value = "Activity"
+            wsReportConverter.Range("BZ1").Value = "Comment"
+            wsReportConverter.Range("CA1").Value = "Transaction ID"
+            wsReportConverter.Range("CB1").Value = "Donation Frequency"
+            wsReportConverter.Range("CC1").Value = "Currency"
+            wsReportConverter.Range("CD1").Value = "Project Remote ID"
+            wsReportConverter.Range("CE1").Value = "Source"
+            wsReportConverter.Range("CF1").Value = "Reason"
+            wsReportConverter.Range("CG1").Value = "Total Donation to be Acknowledged"
+            wsReportConverter.Range("CH1").Value = "Match Amount"
+            wsReportConverter.Range("CI1").Value = "Cause Support Fee"
+            wsReportConverter.Range("CJ1").Value = "Merchant Fee"
+            wsReportConverter.Range("CK1").Value = "Fee Comment"
+            wsReportConverter.Range("CL1").Value = "Charity Name"
+            wsReportConverter.Range("CM1").Value = "Charity ID"
+            wsReportConverter.Range("CN1").Value = "Period Ending"
+            wsReportConverter.Range("CO1").Value = "Currency"
+            wsReportConverter.Range("CP1").Value = "Payment Method"
+            wsReportConverter.Range("CQ1").Value = "Disbursement ID"
+        ' Create the formulas
+            wsReportConverter.Range("A2").Formula = "=IF(OR('Benevity Report'!A13="""",'Benevity Report'!A13=""Totals"",'Benevity Report'!A13=""Total Donations (Gross)"",'Benevity Report'!A13=""Check Fee"", 'Benevity Report'!A13=""Net Total Payment""),"""",'Benevity Report'!A13)"
+            wsReportConverter.Range("B2").Formula = "=IF('Benevity Report'!B13="""","""",IF(ISNUMBER('Benevity Report'!B13),"""",'Benevity Report'!B13))"
+            wsReportConverter.Range("C2").Formula = "=IF('Benevity Report'!C13="""","""",TEXT(LEFT('Benevity Report'!C13,10),""MM/DD/YYYY""))"
+            wsReportConverter.Range("D2").Formula = "=IF('Benevity Report'!D13="""","""",'Benevity Report'!D13)"
+            wsReportConverter.Range("E2").Formula = "=IF('Benevity Report'!E13="""","""",'Benevity Report'!E13)"
+            wsReportConverter.Range("F2").Formula = "=IF('Benevity Report'!F13="""","""",'Benevity Report'!F13)"
+            wsReportConverter.Range("G2").Formula = "=IF('Benevity Report'!G13="""","""",'Benevity Report'!G13)"
+            wsReportConverter.Range("H2").Formula = "=IF('Benevity Report'!H13="""","""",'Benevity Report'!H13)"
+            wsReportConverter.Range("I2").Formula = "=IF('Benevity Report'!I13="""","""",'Benevity Report'!I13)"
+            wsReportConverter.Range("J2").Formula = "=IF('Benevity Report'!J13="""","""",'Benevity Report'!J13)"
+            wsReportConverter.Range("K2").Formula = "=IF('Benevity Report'!K13="""","""",'Benevity Report'!K13)"
+            wsReportConverter.Range("L2").Formula = "=IF('Benevity Report'!L13="""","""",'Benevity Report'!L13)"
+            wsReportConverter.Range("M2").Formula = "=IF('Benevity Report'!M13="""","""",'Benevity Report'!M13)"
+            wsReportConverter.Range("N2").Formula = "=IF('Benevity Report'!N13="""","""",'Benevity Report'!N13)"
+            wsReportConverter.Range("O2").Formula = "=IF('Benevity Report'!O13="""","""",'Benevity Report'!O13)"
+            wsReportConverter.Range("P2").Formula = "=IF('Benevity Report'!P13="""","""",'Benevity Report'!P13)"
+            wsReportConverter.Range("Q2").Formula = "=IF('Benevity Report'!Q13="""","""",'Benevity Report'!Q13)"
+            wsReportConverter.Range("R2").Formula = "=IF('Benevity Report'!R13="""","""",'Benevity Report'!R13)"
+            wsReportConverter.Range("S2").Formula = "=IF(A2="""","""",'Benevity Report'!S13)"
+            wsReportConverter.Range("T2").Formula = "=IF($A2="""","""",'Benevity Report'!T13)"
+            wsReportConverter.Range("U2").Formula = "=IF($A2="""","""",'Benevity Report'!U13)"
+            wsReportConverter.Range("V2").Formula = "=IF($A2="""","""",'Benevity Report'!V13)"
+            wsReportConverter.Range("W2").Formula = "=IF($A2="""","""",IF('Benevity Report'!W13<>"""",'Benevity Report'!W13,""""))"
+            wsReportConverter.Range("X2").Formula = "=IF($A2<>"""",'Benevity Report'!$B$3,"""")"
+            wsReportConverter.Range("Y2").Formula = "=IF($A2<>"""",'Benevity Report'!$B$4,"""")"
+            wsReportConverter.Range("Z2").Formula = "=IF($A2<>"""",'Benevity Report'!$B$5,"""")"
+            wsReportConverter.Range("AA2").Formula = "=IF($A2<>"""",'Benevity Report'!$B$6,"""")"
+            wsReportConverter.Range("AB2").Formula = "=IF($A2<>"""",'Benevity Report'!$B$7,"""")"
+            wsReportConverter.Range("AC2").Formula = "=IF($A2<>"""",'Benevity Report'!$B$8,"""")"
+            wsReportConverter.Range("AD2").Formula = "=IF($A2<>"""",'Benevity Report'!$D$3,"""")"
+            wsReportConverter.Range("AE2").Formula = "=IF(AD2<>"""",IFERROR(TEXT(DATEVALUE(MID(MID(RIGHT(AD2,11),1,10),6,2)&""/""&MID(MID(RIGHT(AD2,11),1,10),9,2)&""/""&LEFT(MID(RIGHT(AD2,11),1,10),4)),""M/D/YYYY""),TEXT(DATEVAULE('Benevity Report'!$D$1),""M/D/YYYY"")),"""")"
+            
+            wsReportConverter.Range("AF2").Formula = "........."
+            wsReportConverter.Range("AG2").Formula = "............."
+            wsReportConverter.Range("AH2").Formula = "=IF(S2="""","""",IF(S2=0,"""",M2&"" - 1""))"
+            wsReportConverter.Range("AI2").Formula = "=IF(S2="""","""",IF(S2=0,"""",A2))"
+            wsReportConverter.Range("AJ2").Formula = "=IF(S2="""","""",IF(S2=0,"""",B2))"
+            wsReportConverter.Range("AK2").Formula = "=IF(S2="""","""",IF(S2=0,"""",C2))"
+            wsReportConverter.Range("AL2").Formula = "=IF(S2="""","""",IF(S2=0,"""",D2))"
+            wsReportConverter.Range("AM2").Formula = "=IF(S2="""","""",IF(S2=0,"""",E2))"
+            wsReportConverter.Range("AN2").Formula = "=IF(S2="""","""",IF(S2=0,"""",F2))"
+            wsReportConverter.Range("AO2").Formula = "=IF(S2="""","""",IF(S2=0,"""",G2))"
+            wsReportConverter.Range("AP2").Formula = "=IF(S2="""","""",IF(S2=0,"""",H2))"
+            wsReportConverter.Range("AQ2").Formula = "=IF(S2="""","""",IF(S2=0,"""",I2))"
+            wsReportConverter.Range("AR2").Formula = "=IF(S2="""","""",IF(S2=0,"""",J2))"
+            wsReportConverter.Range("AS2").Formula = "=IF(S2="""","""",IF(S2=0,"""",K2))"
+            wsReportConverter.Range("AT2").Formula = "=IF(S2="""","""",IF(S2=0,"""",L2))"
+            wsReportConverter.Range("AU2").Formula = "=IF(S2="""","""",IF(S2=0,"""",M2))"
+            wsReportConverter.Range("AV2").Formula = "=IF(S2="""","""",IF(S2=0,"""",N2))"
+            wsReportConverter.Range("AW2").Formula = "=IF(S2="""","""",IF(S2=0,"""",O2))"
+            wsReportConverter.Range("AX2").Formula = "=IF(S2="""","""",IF(S2=0,"""",P2))"
+            wsReportConverter.Range("AY2").Formula = "=IF(S2="""","""",IF(S2=0,"""",Q2))"
+            wsReportConverter.Range("AZ2").Formula = "=IF(S2="""","""",IF(S2=0,"""",R2))"
+            wsReportConverter.Range("BA2").Formula = "=IF(S2="""","""",IF(S2=0,"""",S2))"
+            wsReportConverter.Range("BB2").Formula = "=IF(S2="""","""",IF(S2=0,"""",T2))"
+            wsReportConverter.Range("BC2").Formula = "=IF(S2="""","""",IF(S2=0,"""",U2))"
+            wsReportConverter.Range("BD2").Formula = "=IF(S2="""","""",IF(S2=0,"""",V2))"
+            wsReportConverter.Range("BE2").Formula = "=IF(S2="""","""",IF(S2=0,"""",W2))"
+            wsReportConverter.Range("BF2").Formula = "=IF(S2="""","""",IF(S2=0,"""",X2))"
+            wsReportConverter.Range("BG2").Formula = "=IF(S2="""","""",IF(S2=0,"""",Y2))"
+            wsReportConverter.Range("BH2").Formula = "=IF(S2="""","""",IF(S2=0,"""",Z2))"
+            wsReportConverter.Range("BI2").Formula = "=IF(S2="""","""",IF(S2=0,"""",AA2))"
+            wsReportConverter.Range("BJ2").Formula = "=IF(S2="""","""",IF(S2=0,"""",AB2))"
+            wsReportConverter.Range("BK2").Formula = "=IF(S2="""","""",IF(S2=0,"""",AC2))"
+            
+            wsReportConverter.Range("BL2").Formula = "........"
+            wsReportConverter.Range("BM2").Formula = "............................"
+            wsReportConverter.Range("BN2").Formula = "=IF(T2="""","""",IF(T2=0,"""",M2&"" - 2""))"
+            wsReportConverter.Range("BO2").Formula = "=IF(T2="""","""",IF(T2=0,"""",A2))"
+            wsReportConverter.Range("BP2").Formula = "=IF(T2="""","""",IF(T2=0,"""",B2))"
+            wsReportConverter.Range("BQ2").Formula = "=IF(T2="""","""",IF(T2=0,"""",C2))"
+            wsReportConverter.Range("BR2").Formula = "=IF(T2="""","""",IF(T2=0,"""",D2))"
+            wsReportConverter.Range("BS2").Formula = "=IF(T2="""","""",IF(T2=0,"""",E2))"
+            wsReportConverter.Range("BT2").Formula = "=IF(T2="""","""",IF(T2=0,"""",F2))"
+            wsReportConverter.Range("BU2").Formula = "=IF(T2="""","""",IF(T2=0,"""",G2))"
+            wsReportConverter.Range("BV2").Formula = "=IF(T2="""","""",IF(T2=0,"""",H2))"
+            wsReportConverter.Range("BW2").Formula = "=IF(T2="""","""",IF(T2=0,"""",I2))"
+            wsReportConverter.Range("BX2").Formula = "=IF(T2="""","""",IF(T2=0,"""",J2))"
+            wsReportConverter.Range("BY2").Formula = "=IF(T2="""","""",IF(T2=0,"""",K2))"
+            wsReportConverter.Range("BZ2").Formula = "=IF(T2="""","""",IF(T2=0,"""",L2))"
+            wsReportConverter.Range("CA2").Formula = "=IF(T2="""","""",IF(T2=0,"""",M2))"
+            wsReportConverter.Range("CB2").Formula = "=IF(T2="""","""",IF(T2=0,"""",N2))"
+            wsReportConverter.Range("CC2").Formula = "=IF(T2="""","""",IF(T2=0,"""",O2))"
+            wsReportConverter.Range("CD2").Formula = "=IF(T2="""","""",IF(T2=0,"""",P2))"
+            wsReportConverter.Range("CE2").Formula = "=IF(T2="""","""",IF(T2=0,"""",Q2))"
+            wsReportConverter.Range("CF2").Formula = "=IF(T2="""","""",IF(T2=0,"""",R2))"
+            wsReportConverter.Range("CG2").Formula = "=IF(T2="""","""",IF(T2=0,"""",S2))"
+            wsReportConverter.Range("CH2").Formula = "=IF(T2="""","""",IF(T2=0,"""",T2))"
+            wsReportConverter.Range("CI2").Formula = "=IF(T2="""","""",IF(T2=0,"""",U2))"
+            wsReportConverter.Range("CJ2").Formula = "=IF(T2="""","""",IF(T2=0,"""",V2))"
+            wsReportConverter.Range("CK2").Formula = "=IF(T2="""","""",IF(T2=0,"""",W2))"
+            wsReportConverter.Range("CL2").Formula = "=IF(T2="""","""",IF(T2=0,"""",X2))"
+            wsReportConverter.Range("CM2").Formula = "=IF(T2="""","""",IF(T2=0,"""",Y2))"
+            wsReportConverter.Range("CN2").Formula = "=IF(T2="""","""",IF(T2=0,"""",Z2))"
+            wsReportConverter.Range("CO2").Formula = "=IF(T2="""","""",IF(T2=0,"""",AA2))"
+            wsReportConverter.Range("CP2").Formula = "=IF(T2="""","""",IF(T2=0,"""",AB2))"
+            wsReportConverter.Range("CQ2").Formula = "=IF(T2="""","""",IF(T2=0,"""",AC2))"
+        ' Fill Down
+
+    ' Populate the 'Converted to Two Lines' Worksheet
+        ' Create the column headers
+            wsConvertedToTwoLines.Range("A1").Value = "Number - Transaction ID"
+            wsConvertedToTwoLines.Range("B1").Value = "Company"
+            wsConvertedToTwoLines.Range("C1").Value = "Project"
+            wsConvertedToTwoLines.Range("D1").Value = "Donation Date"
+            wsConvertedToTwoLines.Range("E1").Value = "Donor First Name"
+            wsConvertedToTwoLines.Range("F1").Value = "Donor Last Name"
+            wsConvertedToTwoLines.Range("G1").Value = "Email"
+            wsConvertedToTwoLines.Range("H1").Value = "Address"
+            wsConvertedToTwoLines.Range("I1").Value = "City"
+            wsConvertedToTwoLines.Range("J1").Value = "State/Province"
+            wsConvertedToTwoLines.Range("K1").Value = "Postal Code"
+            wsConvertedToTwoLines.Range("L1").Value = "Activity"
+            wsConvertedToTwoLines.Range("M1").Value = "Comment"
+            wsConvertedToTwoLines.Range("N1").Value = "Transaction ID"
+            wsConvertedToTwoLines.Range("O1").Value = "Donation Frequency"
+            wsConvertedToTwoLines.Range("P1").Value = "Currency"
+            wsConvertedToTwoLines.Range("Q1").Value = "Project Remote ID"
+            wsConvertedToTwoLines.Range("R1").Value = "Source"
+            wsConvertedToTwoLines.Range("S1").Value = "Reason"
+            wsConvertedToTwoLines.Range("T1").Value = "Total Donation to be Acknowledged"
+            wsConvertedToTwoLines.Range("U1").Value = "Match Amount"
+            wsConvertedToTwoLines.Range("V1").Value = "Cause Support Fee"
+            wsConvertedToTwoLines.Range("W1").Value = "Merchant Fee"
+            wsConvertedToTwoLines.Range("X1").Value = "Fee Comment"
+            wsConvertedToTwoLines.Range("Y1").Value = "Charity Name"
+            wsConvertedToTwoLines.Range("Z1").Value = "Charity ID"
+            wsConvertedToTwoLines.Range("AA1").Value = "Period Ending"
+            wsConvertedToTwoLines.Range("AB1").Value = "Currency"
+            wsConvertedToTwoLines.Range("AC1").Value = "Payment Method"
+            wsConvertedToTwoLines.Range("AD1").Value = "Disbursement ID"
+            
+        ' Create the formulas
+            wsConvertedToTwoLines.Range("A2").Formula = "='Benevity Report Converter'!AH2"
+            wsConvertedToTwoLines.Range("B2").Formula = "='Benevity Report Converter'!AI2"
+            wsConvertedToTwoLines.Range("C2").Formula = "='Benevity Report Converter'!AJ2"
+            wsConvertedToTwoLines.Range("D2").Formula = "='Benevity Report Converter'!AK2"
+            wsConvertedToTwoLines.Range("E2").Formula = "='Benevity Report Converter'!AL2"
+            wsConvertedToTwoLines.Range("F2").Formula = "='Benevity Report Converter'!AM2"
+            wsConvertedToTwoLines.Range("G2").Formula = "='Benevity Report Converter'!AN2"
+            wsConvertedToTwoLines.Range("H2").Formula = "='Benevity Report Converter'!AO2"
+            wsConvertedToTwoLines.Range("I2").Formula = "='Benevity Report Converter'!AP2"
+            wsConvertedToTwoLines.Range("J2").Formula = "='Benevity Report Converter'!AQ2"
+            wsConvertedToTwoLines.Range("K2").Formula = "='Benevity Report Converter'!AR2"
+            wsConvertedToTwoLines.Range("L2").Formula = "='Benevity Report Converter'!AS2"
+            wsConvertedToTwoLines.Range("M2").Formula = "='Benevity Report Converter'!AT2"
+            wsConvertedToTwoLines.Range("N2").Formula = "='Benevity Report Converter'!AU2"
+            wsConvertedToTwoLines.Range("O2").Formula = "='Benevity Report Converter'!AV2"
+            wsConvertedToTwoLines.Range("P2").Formula = "='Benevity Report Converter'!AW2"
+            wsConvertedToTwoLines.Range("Q2").Formula = "='Benevity Report Converter'!AX2"
+            wsConvertedToTwoLines.Range("R2").Formula = "='Benevity Report Converter'!AY2"
+            wsConvertedToTwoLines.Range("S2").Formula = "='Benevity Report Converter'!AZ2"
+            wsConvertedToTwoLines.Range("T2").Formula = "='Benevity Report Converter'!BA2"
+            wsConvertedToTwoLines.Range("U2").Formula = "='Benevity Report Converter'!BB2"
+            wsConvertedToTwoLines.Range("V2").Formula = "='Benevity Report Converter'!BC2"
+            wsConvertedToTwoLines.Range("W2").Formula = "='Benevity Report Converter'!BD2"
+            wsConvertedToTwoLines.Range("X2").Formula = "='Benevity Report Converter'!BE2"
+            wsConvertedToTwoLines.Range("Y2").Formula = "='Benevity Report Converter'!BF2"
+            wsConvertedToTwoLines.Range("Z2").Formula = "='Benevity Report Converter'!BG2"
+            wsConvertedToTwoLines.Range("AA2").Formula = "='Benevity Report Converter'!BH2"
+            wsConvertedToTwoLines.Range("AB2").Formula = "='Benevity Report Converter'!BI2"
+            wsConvertedToTwoLines.Range("AC2").Formula = "='Benevity Report Converter'!BJ2"
+            wsConvertedToTwoLines.Range("AD2").Formula = "='Benevity Report Converter'!BK2"
+            
+            
+            wsConvertedToTwoLines.Range("A500").Formula = "='Benevity Report Converter'!BN2"
+            wsConvertedToTwoLines.Range("B500").Formula = "='Benevity Report Converter'!BO2"
+            wsConvertedToTwoLines.Range("C500").Formula = "='Benevity Report Converter'!BP2"
+            wsConvertedToTwoLines.Range("D500").Formula = "='Benevity Report Converter'!BQ2"
+            wsConvertedToTwoLines.Range("E500").Formula = "='Benevity Report Converter'!BR2"
+            wsConvertedToTwoLines.Range("F500").Formula = "='Benevity Report Converter'!BS2"
+            wsConvertedToTwoLines.Range("G500").Formula = "='Benevity Report Converter'!BT2"
+            wsConvertedToTwoLines.Range("H500").Formula = "='Benevity Report Converter'!BU2"
+            wsConvertedToTwoLines.Range("I500").Formula = "='Benevity Report Converter'!BV2"
+            wsConvertedToTwoLines.Range("J500").Formula = "='Benevity Report Converter'!BW2"
+            wsConvertedToTwoLines.Range("K500").Formula = "='Benevity Report Converter'!BX2"
+            wsConvertedToTwoLines.Range("L500").Formula = "='Benevity Report Converter'!BY2"
+            wsConvertedToTwoLines.Range("M500").Formula = "='Benevity Report Converter'!BZ2"
+            wsConvertedToTwoLines.Range("N500").Formula = "='Benevity Report Converter'!CA2"
+            wsConvertedToTwoLines.Range("O500").Formula = "='Benevity Report Converter'!CB2"
+            wsConvertedToTwoLines.Range("P500").Formula = "='Benevity Report Converter'!CC2"
+            wsConvertedToTwoLines.Range("Q500").Formula = "='Benevity Report Converter'!CD2"
+            wsConvertedToTwoLines.Range("R500").Formula = "='Benevity Report Converter'!CE2"
+            wsConvertedToTwoLines.Range("S500").Formula = "='Benevity Report Converter'!CF2"
+            wsConvertedToTwoLines.Range("T500").Formula = "='Benevity Report Converter'!CG2"
+            wsConvertedToTwoLines.Range("U500").Formula = "='Benevity Report Converter'!CH2"
+            wsConvertedToTwoLines.Range("V500").Formula = "='Benevity Report Converter'!CI2"
+            wsConvertedToTwoLines.Range("W500").Formula = "='Benevity Report Converter'!CJ2"
+            wsConvertedToTwoLines.Range("X500").Formula = "='Benevity Report Converter'!CK2"
+            wsConvertedToTwoLines.Range("Y500").Formula = "='Benevity Report Converter'!CL2"
+            wsConvertedToTwoLines.Range("ZB500").Formula = "='Benevity Report Converter'!CM2"
+            wsConvertedToTwoLines.Range("AA500").Formula = "='Benevity Report Converter'!CN2"
+            wsConvertedToTwoLines.Range("AB500").Formula = "='Benevity Report Converter'!CO2"
+            wsConvertedToTwoLines.Range("AC500").Formula = "='Benevity Report Converter'!CP2"
+            wsConvertedToTwoLines.Range("AD500").Formula = "='Benevity Report Converter'!CQ2"
+        ' Fill Down
+
+    ' Populate the 'Sorted and Put into Lines' Worksheet
+        ' Create the column headers
+            wsSorted.Range("A1").Value = "Number - Transaction ID"
+            wsSorted.Range("B1").Value = "Company"
+            wsSorted.Range("C1").Value = "Project"
+            wsSorted.Range("D1").Value = "Donation Date"
+            wsSorted.Range("E1").Value = "Donor First Name"
+            wsSorted.Range("F1").Value = "Donor Last Name"
+            wsSorted.Range("G1").Value = "Email"
+            wsSorted.Range("H1").Value = "Address"
+            wsSorted.Range("I1").Value = "City"
+            wsSorted.Range("J1").Value = "State/Province"
+            wsSorted.Range("K1").Value = "Postal Code"
+            wsSorted.Range("L1").Value = "Activity"
+            wsSorted.Range("M1").Value = "Comment"
+            wsSorted.Range("N1").Value = "Transaction ID"
+            wsSorted.Range("O1").Value = "Donation Frequency"
+            wsSorted.Range("P1").Value = "Currency"
+            wsSorted.Range("Q1").Value = "Project Remote ID"
+            wsSorted.Range("R1").Value = "Source"
+            wsSorted.Range("S1").Value = "Reason"
+            wsSorted.Range("T1").Value = "Total Donation to be Acknowledged"
+            wsSorted.Range("U1").Value = "Match Amount"
+            wsSorted.Range("V1").Value = "Cause Support Fee"
+            wsSorted.Range("W1").Value = "Merchant Fee"
+            wsSorted.Range("X1").Value = "Fee Comment"
+            wsSorted.Range("Y1").Value = "Charity Name"
+            wsSorted.Range("Z1").Value = "Charity ID"
+            wsSorted.Range("AA1").Value = "Period Ending"
+            wsSorted.Range("AB1").Value = "Currency"
+            wsSorted.Range("AC1").Value = "Payment Method"
+            wsSorted.Range("AD1").Value = "Disbursement ID"
+            wsSorted.Range("AE1").Value = "Transaction Total"
+            wsSorted.Range("AF1").Value = "Cause Support Fees Total"
+            wsSorted.Range("AG1").Value = "Mechant Fees Total"
+            wsSorted.Range("AH1").Value = "Duplicate or Not"
+            wsSorted.Range("AI1").Value = "School Name"
+            wsSorted.Range("AJ1").Value = "Campaign Year"
+            wsSorted.Range("AK1").Value = "Campaign Mapping"
+            wsSorted.Range("AL1").Value = "Campaign Name"
+            wsSorted.Range("AM1").Value = "Deposit Date"
+
+        ' Create the filter to pull in the appropriate data from the "Converted to Two Lines" Worksheet
+            wsSorted.Range("A2").Formula2 = "=SORT(UNIQUE(FILTER('Converted to Two Lines'!A2:A601, 'Converted to Two Lines'!A2:A601<>"""")))"
+            
+        ' Fill in the rest of the formulas
+            wsSorted.Range("B2").Formula = "=IF(A2<>"""",TRIM(XLOOKUP('Sorted and Put into lines'!A2,'Converted to Two Lines'!A:A,'Converted to Two Lines'!B:B)),"""")"
+            wsSorted.Range("C2").Formula = "=IF(A2<>"""",XLOOKUP('Sorted and Put into lines'!A2,'Converted to Two Lines'!A:A,'Converted to Two Lines'!C:C),"""")"
+            wsSorted.Range("D2").Formula = "=IF(A2<>"""",XLOOKUP('Sorted and Put into lines'!A2,'Converted to Two Lines'!A:A,'Converted to Two Lines'!D:D),"""")"
+            wsSorted.Range("E2").Formula = "=IF(A2<>"""",XLOOKUP('Sorted and Put into lines'!A2,'Converted to Two Lines'!A:A,'Converted to Two Lines'!E:E),"""")"
+            wsSorted.Range("F2").Formula = "=IF(A2<>"""",XLOOKUP('Sorted and Put into lines'!A2,'Converted to Two Lines'!A:A,'Converted to Two Lines'!F:F),"""")"
+            wsSorted.Range("G2").Formula = "=IF(A2<>"""",XLOOKUP('Sorted and Put into lines'!A2,'Converted to Two Lines'!A:A,'Converted to Two Lines'!G:G),"""")"
+            wsSorted.Range("H2").Formula = "=IF(A2<>"""",XLOOKUP('Sorted and Put into lines'!A2,'Converted to Two Lines'!A:A,'Converted to Two Lines'!H:H),"""")"
+            wsSorted.Range("I2").Formula = "=IF(A2<>"""",XLOOKUP('Sorted and Put into lines'!A2,'Converted to Two Lines'!A:A,'Converted to Two Lines'!I:I),"""")"
+            wsSorted.Range("J2").Formula = "=IF(A2<>"""",XLOOKUP('Sorted and Put into lines'!A2,'Converted to Two Lines'!A:A,'Converted to Two Lines'!J:J),"""")"
+            wsSorted.Range("K2").Formula = "=IF(A2<>"""",XLOOKUP('Sorted and Put into lines'!A2,'Converted to Two Lines'!A:A,'Converted to Two Lines'!K:K),"""")"
+            wsSorted.Range("L2").Formula = "=IF(A2<>"""",XLOOKUP('Sorted and Put into lines'!A2,'Converted to Two Lines'!A:A,'Converted to Two Lines'!L:L),"""")"
+            wsSorted.Range("M2").Formula = "=IF(A2<>"""",XLOOKUP('Sorted and Put into lines'!A2,'Converted to Two Lines'!A:A,'Converted to Two Lines'!M:M),"""")"
+            wsSorted.Range("N2").Formula = "=IF(A2<>"""",XLOOKUP('Sorted and Put into lines'!A2,'Converted to Two Lines'!A:A,'Converted to Two Lines'!N:N),"""")"
+            wsSorted.Range("O2").Formula = "=IF(A2<>"""",XLOOKUP('Sorted and Put into lines'!A2,'Converted to Two Lines'!A:A,'Converted to Two Lines'!O:O),"""")"
+            wsSorted.Range("P2").Formula = "=IF(A2<>"""",XLOOKUP('Sorted and Put into lines'!A2,'Converted to Two Lines'!A:A,'Converted to Two Lines'!P:P),"""")"
+            wsSorted.Range("Q2").Formula = "=IF(A2<>"""",XLOOKUP('Sorted and Put into lines'!A2,'Converted to Two Lines'!A:A,'Converted to Two Lines'!Q:Q),"""")"
+            wsSorted.Range("R2").Formula = "=IF(A2<>"""",XLOOKUP('Sorted and Put into lines'!A2,'Converted to Two Lines'!A:A,'Converted to Two Lines'!R:R),"""")"
+            wsSorted.Range("S2").Formula = "=IF(A2<>"""",XLOOKUP('Sorted and Put into lines'!A2,'Converted to Two Lines'!A:A,'Converted to Two Lines'!S:S),"""")"
+            wsSorted.Range("T2").Formula = "=IF(A2<>"""",XLOOKUP('Sorted and Put into lines'!A2,'Converted to Two Lines'!A:A,'Converted to Two Lines'!T:T),"""")"
+            wsSorted.Range("U2").Formula = "=IF(A2<>"""",XLOOKUP('Sorted and Put into lines'!A2,'Converted to Two Lines'!A:A,'Converted to Two Lines'!U:U),"""")"
+            wsSorted.Range("V2").Formula = "=IF(A2<>"""",XLOOKUP('Sorted and Put into lines'!A2,'Converted to Two Lines'!A:A,'Converted to Two Lines'!V:V),"""")"
+            wsSorted.Range("W2").Formula = "=IF(A2<>"""",XLOOKUP('Sorted and Put into lines'!A2,'Converted to Two Lines'!A:A,'Converted to Two Lines'!W:W),"""")"
+            wsSorted.Range("X2").Formula = "=IF(A2<>"""",XLOOKUP('Sorted and Put into lines'!A2,'Converted to Two Lines'!A:A,'Converted to Two Lines'!X:X),"""")"
+            wsSorted.Range("Y2").Formula = "=IF(A2<>"""",XLOOKUP('Sorted and Put into lines'!A2,'Converted to Two Lines'!A:A,'Converted to Two Lines'!Y:Y),"""")"
+            wsSorted.Range("Z2").Formula = "=IF(A2<>"""",XLOOKUP('Sorted and Put into lines'!A2,'Converted to Two Lines'!A:A,'Converted to Two Lines'!Z:Z),"""")"
+            wsSorted.Range("AA2").Formula = "=IF(A2<>"""",XLOOKUP('Sorted and Put into lines'!A2,'Converted to Two Lines'!A:A,'Converted to Two Lines'!AA:AA),"""")"
+            wsSorted.Range("AB2").Formula = "=IF(A2<>"""",XLOOKUP('Sorted and Put into lines'!A2,'Converted to Two Lines'!A:A,'Converted to Two Lines'!AB:AB),"""")"
+            wsSorted.Range("AC2").Formula = "=IF(A2<>"""",XLOOKUP('Sorted and Put into lines'!A2,'Converted to Two Lines'!A:A,'Converted to Two Lines'!AC:AC),"""")"
+            wsSorted.Range("AD2").Formula = "=IF(A2<>"""",XLOOKUP('Sorted and Put into lines'!A2,'Converted to Two Lines'!A:A,'Converted to Two Lines'!AD:AD),"""")"
+            wsSorted.Range("AE2").Formula = "=IF(A2="""","""",IF(RIGHT(A2,1)=""2"",U2,T2))"
+            wsSorted.Range("AF2").Formula = "=IF(A2="""","""",IF(N2<>N3,V2,0))"
+            wsSorted.Range("AG2").Formula = "=IF(A2="""","""",IF(N2<>N3,W2,0))"
+            wsSorted.Range("AH2").Formula = "=IF(A2="""","""",IF(OR(N2=N1,N2=N3),IF(RIGHT(A2,1)=""2"",""Both Donor and Company - Company Portion"",""Both Donor and Company - Donor Portion""),IF(RIGHT(A2,1)=""2"",""Company Transaction"",""Donor Transaction"")))"
+            wsSorted.Range("AI2").Formula = "=IF(A2="""","""",XLOOKUP(C2,'School Mapping'!C:C,'School Mapping'!D:D))"
+            wsSorted.Range("AJ2").Formula = "=IF(A2="""","""",IF(MONTH(D2)>6,YEAR(D2)&""-""&TEXT(D2,""YY"")+1,YEAR(D2)-1&""-""&TEXT(D2,""YY"")))"
+            wsSorted.Range("AK2").Formula = "=IF(A2="""","""",IF(OR(AH2=""Both Donor and Company - Company Portion"",AH2=""Company Transaction""),""ATF Employer Matching Gifts"",IF(OR(AH2=""Both Donor and Company - Donor Portion"",AH2=""Donor Transaction""),""ATF Employee Giving"",""CHECK!!"")))"
+            wsSorted.Range("AL2").Formula = "=IF(A2<>"""",AI2&"" ""&AJ2&"" ""&AK2,"""")"
+            wsSorted.Range("AM2").Formula = "=IF(A2="""","""",XLOOKUP(AD2,'Benevity Report Converter'!AC:AC,'Benevity Report Converter'!AE:AE))"
+        ' Fill Down
+                    
+        
+    ' Populate the 'SF Import File' Worksheet
+        ' Create the Headers
+            wsSFImport.Range("A1").Value = "C&P Account Name Correction"
+            wsSFImport.Range("B1").Value = "Company"
+            wsSFImport.Range("C1").Value = "Disbursement"
+            wsSFImport.Range("D1").Value = "Check Number/Reference Number"
+            wsSFImport.Range("E1").Value = "Donation Date"
+            wsSFImport.Range("F1").Value = "Deposit Date"
+            wsSFImport.Range("G1").Value = "Donation Amount"
+            wsSFImport.Range("H1").Value = "Contact1 First Name"
+            wsSFImport.Range("I1").Value = "Contact1 Last Name"
+            wsSFImport.Range("J1").Value = "Contact1 Work Email"
+            wsSFImport.Range("K1").Value = "Donation Type"
+            wsSFImport.Range("L1").Value = "Stage"
+            wsSFImport.Range("M1").Value = "Payment Method"
+            wsSFImport.Range("N1").Value = "Campaign Name"
+            wsSFImport.Range("O1").Value = "Donation Name"
+            wsSFImport.Range("P1").Value = "Description"
+        ' Create the Formulas
+            wsSFImport.Range("A2").Formula = "=IF('Sorted and Put into lines'!A2="""","""",XLOOKUP('Sorted and Put into lines'!C2,'School Mapping'!C:C,'School Mapping'!B:B))"
+            wsSFImport.Range("B2").Formula = "=IF('Sorted and Put into lines'!A2="""","""",'Sorted and Put into lines'!B2)"
+            wsSFImport.Range("C2").Formula = "=IF('Sorted and Put into lines'!A2="""","""",'Sorted and Put into lines'!AD2)"
+            wsSFImport.Range("D2").Formula = "=IF('Sorted and Put into lines'!A2="""","""",'Sorted and Put into lines'!N2)"
+            wsSFImport.Range("E2").Formula = "=IF('Sorted and Put into lines'!A2="""","""",'Sorted and Put into lines'!D2)"
+            wsSFImport.Range("F2").Formula = "=IF(A2="""","""",'Sorted and Put into lines'!AM2)"
+            wsSFImport.Range("G2").Formula = "=IF('Sorted and Put into lines'!A2="""","""",'Sorted and Put into lines'!AE2)"
+            wsSFImport.Range("H2").Formula = "=IF('Sorted and Put into lines'!A2="""","""",TRIM(PROPER(IF('Sorted and Put into lines'!E2=""Not shared by donor"",""Anonymous"",'Sorted and Put into lines'!E2))))"
+            wsSFImport.Range("I2").Formula = "=IF('Sorted and Put into lines'!A2="""","""",TRIM(PROPER(IF('Sorted and Put into lines'!F2=""Not shared by donor"",""Anonymous"",'Sorted and Put into lines'!F2))))"
+            wsSFImport.Range("J2").Formula = "=IF('Sorted and Put into lines'!A2="""","""",IF('Sorted and Put into lines'!G2=""Not Shared by donor"","""",TRIM(LOWER('Sorted and Put into lines'!G2))))"
+            wsSFImport.Range("K2").Formula = "=IF('Sorted and Put into lines'!A2="""","""",IF(OR('Sorted and Put into lines'!AH2=""Company Transaction"",'Sorted and Put into lines'!AH2=""Both Donor and Company - Company Portion""),""Employer Matching Gifts"",IF(OR('Sorted and Put into lines'!AH2=""Donor Transaction"",'Sorted and Put into lines'!AH2=""Both Donor and Company - Donor Portion""),""Employee Giving"", ""Need to Check"")))"
+            wsSFImport.Range("L2").Formula = "=IF('Sorted and Put into lines'!A2="""","""",""Authorized"")"
+            wsSFImport.Range("M2").Formula = "=IF('Sorted and Put into lines'!A2="""","""",'Sorted and Put into lines'!AC2)"
+            wsSFImport.Range("N2").Formula = "=IF(A2="""","""",'Sorted and Put into lines'!AL2)"
+            wsSFImport.Range("O2").Formula = "=IF('Sorted and Put into lines'!A2="""","""",'Sorted and Put into lines'!B2&"" ""&'Sorted and Put into lines'!N2&"" on ""&TEXT('Sorted and Put into lines'!D2,""MM.DD.YYYY""))"
+            wsSFImport.Range("P2").Formula = "=IF('Sorted and Put into lines'!A2="""","""",""Benevity"")"
+        ' Fill Down
+
+    ' AutoFit the Columns
+        wsReportConverter.Columns("A:CQ").AutoFit
+        wsConvertedToTwoLines.Columns("A:AD").AutoFit
+        wsSorted.Columns("A:AM").AutoFit
+        wsSFImport.Columns("A:P").AutoFit
+    
+    ' Hide all worksheets except for "COMPLETE RESET", "Benevity Report", "SF Import File"
+        wsSchoolMap.Visible = xlSheetHidden
+        wsReportConverter.Visible = xlSheetHidden
+        wsConvertedToTwoLines.Visible = xlSheetHidden
+        wsSorted.Visible = xlSheetHidden
+    
+    Application.ScreenUpdating = True
+    
+    MsgBox "The Benevity - Salesforce Import File has been created. Double check the import file to make sure everything looks good!" & _
+        vbCrLf & vbCrLf & "Place the newly renamed file into the AR SharePoint folder." & vbCrLf & vbCrLf & _
+        "**** Please note: the 'AR' relies on the newly renamed one, as there is additional information in the file vs. the file straight from the donation site."
+
+End Sub
