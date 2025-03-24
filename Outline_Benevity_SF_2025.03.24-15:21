@@ -7,18 +7,22 @@ Sub Benevity_SF_Part2()
 ' Create a variable, "DonationSiteStartRow", to hold the start row of the data from the Benevity Site's Reports.
     ' DonationSiteStartRow = 13
 
-' Use a message box to ask the user if they are sure they want to proceed to Part 2 of the 'DonationSite' converter.
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'''''''''''''''''''''''''''''' BENEVITY - PART 2 SETUP (B-SETUP) '''''''''''''''''''''''''''''''
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+' B-SETUP.Step: Use a message box to ask the user if they are sure they want to proceed to Part 2 of the 'DonationSite' converter.
     ' Create a variable, "UserResponse" to hold answer.
     
-' Check the 'UserResponse' answer:
+' B-SETUP.Step: Check the 'UserResponse' answer:
     ' If they click "no", exit sub
     ' If they click "yes", proceed to the next steps.
     
-' Create a variable, "wbBenevityConverter", to hold the value of the current workbook.
+' B-SETUP.Step: Create a variable, "wbBenevityConverter", to hold the value of the current workbook.
 
-' Create a variable for the worksheet already named, "Benevity Disbursement Details", call the variable "wsBenevityDetails"
+' B-SETUP.Step: Create a variable for the worksheet already named, "Benevity Disbursement Details", call the variable "wsBenevityDetails"
 
-' Check if the "Benevity Disbursement Details" (wsBenevityDetails) worksheet has all the correct column headers (in the correct placement) - make it case-insensitive:
+' B-SETUP.Step: Check if the "Benevity Disbursement Details" (wsBenevityDetails) worksheet has all the correct column headers (in the correct placement) - make it case-insensitive:
     ' PERIOD END DATE (B1)
     ' DISBURSING ENTITY (C1)
     ' PAYMENT METHOD (D1)
@@ -36,35 +40,42 @@ Sub Benevity_SF_Part2()
             ' Exit Sub
         ' If they are, proceed to the next steps
 
-' Use a message box to ask the user if they have more than 1 file to converter.
+' B-SETUP.Step: Use a message box to ask the user if they have more than 1 file to converter.
     ' Create a variable, "UserResponse2" to hold answer.
 
-' Check the "UserResponse2" variable.
+' B-SETUP.Step: Check the "UserResponse2" variable.
     ' If they chose "yes", jump to the 'BENEVITY - MULTIPLE REPORT CONSOLIDATION SECTION' of the macro.
     ' If they chose "no", jump to the 'BENEVITY - SINGLE REPORT CONSOLIDATION SECTION' of the macro.
 
 
-''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
-'''''' BENEVITY - SINGLE REPORT CONSOLIDATION SECTION ''''''
-''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'''''''''''''''''''' BENEVITY - SINGLE REPORT CONSOLIDATION SECTION (B-SRC) ''''''''''''''''''''
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 ' Start the 'BENEVITY - SINGLE REPORT CONSOLIDATION SECTION' section of the macro.
+
+' B-SRC.Step: '
+
+
+
+
+
+
 
 
 ' End the 'BENEVITY - SINGLE REPORT CONSOLIDATION SECTION' of the macro and jump to the 'BENEVITY REPORT CONVERSION SECTION' of the macro.
 
-
-''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
-''''' BENEVITY - MULTIPLE REPORT CONSOLIDATION SECTION '''''
-''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+''''''''''''''''''' BENEVITY - MULTIPLE REPORT CONSOLIDATION SECTION (B-MRC) '''''''''''''''''''
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 ' Start the 'BENEVITY - MULTIPLE REPORT CONSOLIDATION SECTION' of the macro.
 
-' Open a file dialog window to ask user for a folder path, save the folder path in a variable, "FolderPath"
+' B-MRC.Step: Open a file dialog window to ask user for a folder path, save the folder path in a variable, "FolderPath"
     ' If the user clicks "Cancel",
         ' Create a message box that says:
             ' "No folder path was selected. Please find the correct folder path and try again."
     ' If the user clicks on a folder path, store the folder path in a variable, "FolderPath".
     
-' Check the "FolderPath" variable to make sure the folder name contains "Benevity" within the name.
+' B-MRC.Step: Check the "FolderPath" variable to make sure the folder name contains "Benevity" within the name.
     ' If it doesn't, then give the user a message box saying:
         ' "To run this macro, you need to have a folder with 'Benevity' in the file name. _
          ' Please go back and change the folder name, or find the correct folder. Then try again.", _
@@ -72,11 +83,12 @@ Sub Benevity_SF_Part2()
     ' If it does, check to see if there is 1 or more CSV files in the folder.
         ' If there is not, write a message box saying:
             ' "No CSV files were found in the folder. Please go back and locate the correct folder, then try again."
-        ' If there is only 1 file. Store the file in name in a variable, "FilePath", then revert back to the "BENEVITY - SINGLE REPORT CONSOLIDATION SECTION" - Part ....
+        ' If there is only 1 file. Store the file in name in a variable, "FilePath", then revert back to the "BENEVITY - SINGLE REPORT CONSOLIDATION SECTION" (B-SRC.Step10)
         ' If there is more than 1 file, continue to the next steps.
 
-' Create a new worksheet called, "Benevity Consolidate & Convert". Store it in a variable, "wsReportConverter"
-' Populate the column headers for the "Benevity Consolidate & Convert" (wsReportConverter) worksheet.
+' B-MRC.Step: Create a new worksheet called, "Benevity Consolidate & Convert". Store it in a variable, "wsReportConverter"
+
+' B-MRC.Step: Populate the column headers for the "Benevity Consolidate & Convert" (wsReportConverter) worksheet.
     ' Company (A1)
     ' Project (B1)
     ' Donation Date (C1)
@@ -103,25 +115,25 @@ Sub Benevity_SF_Part2()
     ' File Name (X1)
     ' Worksheet Name (Y1)
     '
-' Create a variable, "BenevityConvertLastRow", for the last row of the "wbBenevityConverter" workbook, worksheet "Benevity Consolidate & Convert" (wsBenevityConvert) and add 1 (equals 2)
+' B-MRC.Step: Create a variable, "BenevityConvertLastRow", for the last row of the "wbBenevityConverter" workbook, worksheet "Benevity Consolidate & Convert" (wsBenevityConvert) and add 1 (equals 2)
     ' BenevityConvertLastRow = 2
 
-' Create a variable, "wbTemp", to hold the value of the Temporary workbook as it loops through the files.
-' Create a variable, "TempBenevityFiles", to hold a list of the files that don't cause any issues
-' Create a variable, "UnusedFiles", to hold a list of the files that aren't Benevity files
-' Create a variable, "MissingDisbursements", to hold a list of the missing disbursements from Column E of the "Benevity Disbursement Details" (wsBenevityDetails) worksheet.
-' Create a variable, "DisbursementDetailsRow", to hold the cell row number if it is found in the "Benevity Disbursement Details" worksheet.
-' Create a variable, "DisbursementDate", to hold the disbursement date.
-' Create a variable, "SchoolUmbrella", to hold the value of the school umbrella based on Charity ID.
+' B-MRC.Step: Create a variable, "wbTemp", to hold the value of the Temporary workbook as it loops through the files.
+' B-MRC.Step: Create a variable, "TempBenevityFiles", to hold a list of the files that don't cause any issues
+' B-MRC.Step: Create a variable, "UnusedFiles", to hold a list of the files that aren't Benevity files
+' B-MRC.Step: Create a variable, "MissingDisbursements", to hold a list of the missing disbursements from Column E of the "Benevity Disbursement Details" (wsBenevityDetails) worksheet.
+' B-MRC.Step: Create a variable, "DisbursementDetailsRow", to hold the cell row number if it is found in the "Benevity Disbursement Details" worksheet.
+' B-MRC.Step: Create a variable, "DisbursementDate", to hold the disbursement date.
+' B-MRC.Step: Create a variable, "SchoolUmbrella", to hold the value of the school umbrella based on Charity ID.
 
-' Run the public 'CurrentTime_Converter' procedure to get the public "CurrentTime" variable
-' Create a variable, "NewFolder". Name it "Benevity - " & CurrentTime
-' Create a new folder in the original 'FolderPath' and name it based off of "NewFolder"
+' B-MRC.Step: Run the public 'CurrentTime_Converter' procedure to get the public "CurrentTime" variable
+' B-MRC.Step: Create a variable, "NewFolder". Name it "Benevity - " & CurrentTime
+' B-MRC.Step: Create a new folder in the original 'FolderPath' and name it based off of "NewFolder"
 
-' Start a loop
-    ' Start to go through each CSV file in the 'FolderPath', open each file, one at a time.
-    ' Create a variable, "TempFile" to hold the value of the current file (the file name without the entire file path and the CSV extension) in the loop.
-    ' Check A4 to make sure it has "Charity ID" as its value.
+' B-MRC.Steps : Start a loop
+    ' B-MRC.Step: Start to go through each CSV file in the 'FolderPath', open each file, one at a time.
+    ' B-MRC.Step: Create a variable, "TempFile" to hold the value of the current file (the file name without the entire file path and the CSV extension) in the loop.
+    ' B-MRC.Step: Check A4 to make sure it has "Charity ID" as its value.
         ' If it doesn't:
             ' Save this 'TempFile' name in the list, "UnusedFiles"
             ' Close the file without saving any changes
@@ -129,8 +141,8 @@ Sub Benevity_SF_Part2()
         ' If it was found:
             ' Save the value of B4 in a variable, "CharityID"
             ' Proceed to the next step in the loop.
-    ' Store the value of B8 in a variable, "DisbursementID"
-    ' Check Column E, in the "Benevity Disbursement Details" (wsBenevityDetails) worksheet to see if the "DisbursementID" is within one of the cells values.
+    ' B-MRC.Step: Store the value of B8 in a variable, "DisbursementID"
+    ' B-MRC.Step: Check Column E, in the "Benevity Disbursement Details" (wsBenevityDetails) worksheet to see if the "DisbursementID" is within one of the cells values.
         ' If it isn't:
             ' Save the 'DisbursementID' variable in the "MissingDisbursements" list.
             ' Close the file without saving any changes.
@@ -193,7 +205,7 @@ Sub Benevity_SF_Part2()
             ' Save the Temporary worksheet using the 'RenamedFile' as a .CSV file and in the new folder.
             ' Then go to the next file in the loop.
             ' Add 'TempFile' to the "TempBenevityFiles" list
-    ' Once the loop finishes:
+    ' B-MRC.Step: Once the loop finishes:
         ' If the 'TempBenevityFiles' list is empty:
             ' Create a Message Box for the user saying:
                 ' "No files were able to be converted." and 2 line breaks
@@ -205,10 +217,10 @@ Sub Benevity_SF_Part2()
     
 ' End the 'BENEVITY - MULTIPLE REPORT CONSOLIDATION SECTION' of the macro and jump to the 'BENEVITY REPORT CONVERSION SECTION' of the macro.
 
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'''''''''''''''''''''''''''''' BENEVITY REPORT CONVERSION SECTION ''''''''''''''''''''''''''''''
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 
-''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
-'''''''''''' BENEVITY REPORT CONVERSION SECTION ''''''''''''
-''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 
 
 End Sub
